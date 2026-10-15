@@ -1,0 +1,16 @@
+[
+  {"file": "dokimi/dokimi/schemas/answers.v1.json", "line": 37, "severity": "blocker", "rule": "schema-in-place",
+   "message": "grounding is made required in answers.v1 in place: every stored answers.v1 artifact no longer validates. A breaking change needs a new version (answers.v2, SCHEMA_VERSIONS, SUPERSEDED_VERSIONS) or an optional field; schema_compat fails on it."},
+  {"file": "dokimi/pyproject.toml", "line": 117, "severity": "blocker", "rule": "mypy-overrides",
+   "message": "Adds dokimi.eval.grounding to the [[tool.mypy.overrides]] ignore_errors list, which only shrinks. It hides real errors in annotate_answers (score: float = None); annotate them float | None instead."},
+  {"file": "dokimi/dokimi/eval/grounding.py", "line": 117, "severity": "blocker", "rule": "persisted-keys",
+   "message": "annotate_answers renames the persisted with_docs / without_docs keys to with_context / baseline in an answers.v1 artifact; eval score, reports and _contexts_of read with_docs and find no answers."},
+  {"file": "dokimi/dokimi/eval/grounding.py", "line": 108, "severity": "blocker", "rule": "off-by-one",
+   "message": "Off-by-one: len(contexts) > min_contexts should be >=, as in evaluate_grounding. With the default 1, an answer with exactly one snippet gets null scores."},
+  {"file": "dokimi/docs/benchmarking-and-comparison.md", "line": 208, "severity": "blocker", "rule": "docs-flag",
+   "message": "The docs use --min-docs, but the flag is --min-contexts: the documented command fails with unrecognized arguments and test_docs_code_refs fails."},
+  {"file": "dokimi/dokimi/eval/grounding.py", "line": 112, "severity": "minor", "rule": "dropped-fields",
+   "message": "annotate_answers rebuilds each item from a fixed set of fields and drops the rest of the input record."},
+  {"file": "dokimi/dokimi/eval/grounding.py", "line": 86, "severity": "nit", "rule": "report-filter",
+   "message": "The grounding report summary does not record which min_contexts filter was applied."}
+]

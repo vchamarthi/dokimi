@@ -55,6 +55,8 @@ dev = [
 ]
 ocr = ["docling>=2.0"]
 mcp = ["mcp>=1.0"]
+# Runs and grades the repository evals in .agent-evals/ (repoevals.toml).
+eval = ["repoevals @ git+https://github.com/vchamarthi/repoevals@v0.4.1"]
 embeddings = ["sentence-transformers>=2.2"]
 # Optional local baseline arm for `eval judge-validity --scorer typed:...`.
 # Floor is the version the arm was measured with: the adapter relies on

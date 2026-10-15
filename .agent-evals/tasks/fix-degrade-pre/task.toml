@@ -1,0 +1,18 @@
+version = "1.0"
+
+[metadata]
+family = "fix"
+base = "16e319fdcb2f4eb6e0dfa44b7c05a2d451599586"
+created = "2026-10-15"
+source = "https://github.com/intel/dokimi/pull/57"
+
+[agent]
+timeout_sec = 1800
+
+[grader]
+type = "dokimi_code"
+targets = ["tests/test_hidden_degrade_pre.py"]
+regression_targets = ["tests"]
+# the agent's own test edits stay, as in the run.py grader this replaces
+allow_test_edits = true
+gate = ["strict_pass", "ruff_ok", "mypy_ok"]

@@ -1,0 +1,17 @@
+{
+  "seeds": [
+    {"id": "schema_in_place", "class": "compat", "file": "dokimi/dokimi/schemas/answers.v1.json", "lines": [37, 85],
+     "kw": "new (schema )?version|answers\\.v2|\\bv2\\b|bump|supersed|in[- ]place|breaking|schema_compat|no longer validat|already (been )?(written|stored|on disk)|backward[- ]compat"},
+    {"id": "mypy_override", "class": "policy", "file": "dokimi/pyproject.toml", "lines": [117],
+     "kw": "overrides?|ignore_errors|exempt|only shrinks?|must not grow|silenc|suppress|mask|hid(e|es|ing)"},
+    {"id": "key_rename", "class": "compat", "file": "dokimi/dokimi/eval/grounding.py", "lines": [117, 118],
+     "kw": "with_context|with_docs|without_docs|renam|persisted key"},
+    {"id": "logic_off_by_one", "class": "logic", "file": "dokimi/dokimi/eval/grounding.py", "lines": [108],
+     "kw": "off[- ]by[- ]one|>=|boundary|exactly (one|1)|inclusive|strictly greater"},
+    {"id": "docs_flag_drift", "class": "docs", "file": "dokimi/docs/benchmarking-and-comparison.md", "lines": [201, 208],
+     "kw": "min[-_]contexts|does ?n[o']t exist|unrecogni[sz]ed|no such|test_docs_code_refs|drift|mismatch"}
+  ],
+  "decoys": [
+    {"id": "evaluate_grounding_bound", "file": "dokimi/dokimi/eval/grounding.py", "lines": [71]}
+  ]
+}

@@ -1,0 +1,1 @@
+Please rename the `benchmark run` flag `--multi-run N` to `--repeats N`. The current name reads as if it ran several models or targets at once, while it repeats answer generation and evaluation N times on one question set, and `tasks run` already calls the same idea `--repeats`. No deprecated alias is needed: the old spelling can simply stop working. Commit your change.

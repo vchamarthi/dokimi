@@ -1,0 +1,37 @@
+# dokimi's own repository evals, run and graded by repoevals (https://github.com/vchamarthi/repoevals).
+# See .agent-evals/README.md.
+
+[repo]
+id = "dokimi"
+url = "https://github.com/intel/dokimi"
+tasks = ".agent-evals/tasks"
+graders = ".agent-evals/graders"
+
+[guidance]
+globs = ["**/AGENTS.md", "**/CLAUDE.md", "CONTRIBUTING.md", "dokimi/CONTRIBUTING.md", "dokimi/README.md", "README.md"]
+
+[policy]
+test_globs = ["dokimi/tests/**"]
+library_globs = ["dokimi/dokimi/**"]
+
+[test]
+adapter = "pytest"
+# The project lives in dokimi/; targets are relative to it. Timing- and process-sensitive tests that flake on a
+# loaded host are left out.
+command = """cd dokimi && python -m pytest -q -p no:cacheprovider \
+  --deselect tests/test_example_runner_processes.py \
+  --deselect tests/test_container_agent.py::test_probe_finds_a_proxy_that_forwards_plain_http \
+  --deselect tests/test_benchflow_harness.py::test_run_bench_kills_the_process_group_on_timeout \
+  {targets}"""
+timeout_sec = 1800
+env = { PYTHONDONTWRITEBYTECODE = "1" }
+
+[environment]
+# Build once from the repository root: docker build -f .agent-evals/Dockerfile -t dokimi-eval .
+image = "dokimi-eval"
+dockerfile = ".agent-evals/Dockerfile"
+
+# guidance:none removes every [guidance].globs file, READMEs and CONTRIBUTING included, which several tasks read.
+# This arm removes only the agent files, like guidance:none in the run.py grader.
+[arms.no-agent-files]
+remove = ["**/AGENTS.md", "**/CLAUDE.md"]

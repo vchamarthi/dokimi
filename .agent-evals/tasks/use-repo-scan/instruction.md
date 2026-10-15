@@ -1,0 +1,1 @@
+I keep my agent instructions in examples/toy-repo/AGENTS.md (pretend it is my own repository). Use dokimi to check whether what that file tells agents is still true, save the dokimi manifest you used as examples/toy-repo/repo-eval.yaml, and tell me which statements are wrong and how to fix them.

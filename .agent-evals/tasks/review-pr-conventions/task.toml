@@ -1,0 +1,15 @@
+version = "1.0"
+
+[metadata]
+family = "review"
+base = "16e319fdcb2f4eb6e0dfa44b7c05a2d451599586"
+created = "2026-10-15"
+source = "https://github.com/intel/dokimi/pull/57"
+
+[agent]
+timeout_sec = 1800
+
+[grader]
+type = "review_seeded"
+review_title = "eval grounding: baseline lift, --min-contexts, --annotate"
+gate = ["recall>=0.6", "precision>=0.5", "decoys_flagged<=0"]
