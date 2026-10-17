@@ -421,6 +421,32 @@ def test_an_unpriced_call_blinds_the_cap_so_the_run_stops(doc):
     assert [r["skipped"] for r in results] == [False] + [True] * (len(items) - 1)
 
 
+def test_a_call_with_no_usage_dict_blinds_the_cap(doc):
+    """A missing or non-dict usage is no price. The cap must stop, not keep spending."""
+    items = tp.build_items(doc, ["assertive"])
+    calls = []
+
+    def omitted(item):
+        calls.append(item["id"])
+        return {"called": []}
+
+    results = tp.run_probe(items, omitted, reps=1, concurrency=1, max_cost_usd=100.0)
+    assert len(calls) == 1
+    assert results[0]["usage"] is None and results[0]["skipped"] is False
+    assert all(r["skipped"] for r in results[1:])
+
+    calls.clear()
+
+    def non_dict(item):
+        calls.append(item["id"])
+        return {"called": [], "usage": "n/a"}
+
+    results = tp.run_probe(items, non_dict, reps=1, concurrency=1, max_cost_usd=100.0)
+    assert len(calls) == 1
+    assert results[0]["usage"] is None
+    assert all(r["skipped"] for r in results[1:])
+
+
 def test_no_cap_runs_unpriced_calls_to_the_end(doc):
     items = tp.build_items(doc, ["assertive"])
     results = tp.run_probe(items, lambda i: {"called": [], "usage": {"cost_usd": None}}, reps=1, concurrency=1)

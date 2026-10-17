@@ -275,11 +275,11 @@ def run_probe(items: Sequence[dict], call: Caller, reps: int = 1, concurrency: i
     With ``max_cost_usd``, once the priced calls have spent it no new call starts: the rest are
     recorded ``skipped`` and left out of the summary. Calls already in flight finish, so the
     spend can pass the cap by up to ``concurrency - 1`` calls. A call that failed but was billed
-    carries its ``usage`` on the exception and counts. A call that comes back with no price
-    leaves the cap blind, so no new call starts after it: a cap that cannot see the spend
-    does not allow an unlimited one. Jobs run in item order; at any concurrency the last group
-    reached may be partial. Partial groups are summarized from the cells that ran, so their
-    A/B counterbalancing is incomplete.
+    carries its ``usage`` on the exception and counts. A call that comes back with no price —
+    ``cost_usd`` missing or null, or no usage dict at all — leaves the cap blind, so no new call
+    starts after it: a cap that cannot see the spend does not allow an unlimited one. Jobs run in
+    item order; at any concurrency the last group reached may be partial. Partial groups are
+    summarized from the cells that ran, so their A/B counterbalancing is incomplete.
     """
     jobs = [(i, r) for i in items for r in range(reps)]
     done = [0]
@@ -311,11 +311,15 @@ def run_probe(items: Sequence[dict], call: Caller, reps: int = 1, concurrency: i
                 res["usage"] = usage if isinstance(usage, dict) else None
         res["elapsed_sec"] = round(time.time() - t0, 3)
         with lock:
-            usage = res.get("usage")
-            if usage and isinstance(usage, dict):
-                cost = usage.get("cost_usd")
-                blind[0] = blind[0] or cost is None
-                spent[0] += cost or 0.0
+            if not skip:
+                usage = res.get("usage")
+                if isinstance(usage, dict):
+                    cost = usage.get("cost_usd")
+                    blind[0] = blind[0] or cost is None
+                    spent[0] += cost or 0.0
+                else:
+                    # no usage dict is no price; do not keep starting calls the cap cannot see
+                    blind[0] = True
             done[0] += 1
             if on_progress:
                 on_progress(done[0], len(jobs))
