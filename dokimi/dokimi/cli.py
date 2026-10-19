@@ -88,18 +88,34 @@ def build_parser() -> argparse.ArgumentParser:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse ``argv`` (default ``sys.argv[1:]``), then fill in defaults that hang on another flag.
 
-    A left-out ``--judge-model`` becomes the default judge that runs on ``--judge-provider``,
-    read once every flag is parsed, so the two flags can come in either order.
+    A left-out judge model becomes the default judge that runs on its provider, read once
+    every flag is parsed, so the two flags can come in either order. That covers
+    ``--judge-model`` / ``--judge-provider``, ``eval panel-score``'s ``--model`` /
+    ``--provider``, and ``--ragas-model`` / ``--ragas-provider``.
     """
     parser = build_parser()
     args = parser.parse_args(argv)
-    if getattr(args, "judge_model", None) is JUDGE_MODEL_FOR_PROVIDER:
-        model = default_judge_model(args.judge_provider)
-        if model is None:
-            parser.error(f"--judge-provider {args.judge_provider} has no default judge model; "
-                         f"pass --judge-model")
-        args.judge_model = model
+    _fill_judge_model(parser, args, "judge_model", "judge_provider",
+                      "--judge-model", "--judge-provider")
+    _fill_judge_model(parser, args, "model", "provider", "--model", "--provider")
+    _fill_judge_model(parser, args, "ragas_model", "ragas_provider",
+                      "--ragas-model", "--ragas-provider")
     return args
+
+
+def _fill_judge_model(parser: argparse.ArgumentParser, args: argparse.Namespace,
+                      model_attr: str, provider_attr: str,
+                      model_flag: str, provider_flag: str) -> None:
+    """Replace a left-out judge model with the one that runs on its provider."""
+    if getattr(args, model_attr, None) is not JUDGE_MODEL_FOR_PROVIDER:
+        return
+    provider = getattr(args, provider_attr, None)
+    if not isinstance(provider, str):
+        return
+    model = default_judge_model(provider)
+    if model is None:
+        parser.error(f"{provider_flag} {provider} has no default judge model; pass {model_flag}")
+    setattr(args, model_attr, model)
 
 
 def main() -> None:

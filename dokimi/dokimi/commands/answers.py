@@ -14,10 +14,13 @@ from dokimi.defaults import (
     DEFAULT_ANSWER_MODEL,
     DEFAULT_ANSWER_PROVIDER,
     DEFAULT_CONCURRENCY,
+    DEFAULT_GENERATOR_MODEL,
+    DEFAULT_GENERATOR_PROVIDER,
     DEFAULT_JUDGE_MODEL,
     DEFAULT_JUDGE_PROVIDER,
     DEFAULT_MAX_TOKENS_PER_QUESTION,
     DEFAULT_RETRIEVAL_TOP_K,
+    JUDGE_MODEL_FOR_PROVIDER,
 )
 
 
@@ -142,8 +145,10 @@ def register(sub, positive_int) -> None:
                          help="Explicit Context7 library ID. Overrides auto-resolution.")
     gen_a_p.add_argument("--ragas", action="store_true",
                          help="Run RAGAS meta-evaluation after answer generation and save alongside answers.")
-    gen_a_p.add_argument("--ragas-model", default=DEFAULT_JUDGE_MODEL,
-                         help=f"LLM for RAGAS judge (default: {DEFAULT_JUDGE_MODEL})")
+    gen_a_p.add_argument("--ragas-model", default=JUDGE_MODEL_FOR_PROVIDER,
+                         help=("LLM for the RAGAS judge (default: the default judge for "
+                               f"--ragas-provider: {DEFAULT_JUDGE_MODEL} on {DEFAULT_JUDGE_PROVIDER}, "
+                               f"{DEFAULT_GENERATOR_MODEL} on {DEFAULT_GENERATOR_PROVIDER})"))
     gen_a_p.add_argument("--ragas-provider", default=DEFAULT_JUDGE_PROVIDER,
                          choices=["openai", "anthropic"],
                          help=f"Provider for RAGAS judge LLM (default: {DEFAULT_JUDGE_PROVIDER})")

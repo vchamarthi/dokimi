@@ -109,6 +109,37 @@ def test_the_placeholder_reads_as_the_default_judge_without_parse_args():
     assert default_judge_model("google") is None
 
 
+@pytest.mark.parametrize("argv, model_attr, provider_attr, provider_flag, model_flag", [
+    (["eval", "panel-score", "--answers", "x", "--product", "p"],
+     "model", "provider", "--provider", "--model"),
+    (["eval", "ragas", "--answers", "x"],
+     "ragas_model", "ragas_provider", "--ragas-provider", "--ragas-model"),
+    (["answers", "generate", "--product", "p", "--questions", "q"],
+     "ragas_model", "ragas_provider", "--ragas-provider", "--ragas-model"),
+])
+def test_a_judge_flag_under_another_name_follows_its_provider(
+        argv, model_attr, provider_attr, provider_flag, model_flag):
+    # These commands do not take --judge-provider. A left-out model was still
+    # claude-sonnet-5-5, so --provider openai / --ragas-provider openai sent
+    # that name to OpenAI and failed at the first judge call.
+    bare = build_parser().parse_args(argv)
+    assert getattr(bare, model_attr) is JUDGE_MODEL_FOR_PROVIDER
+    openai = parse_args([*argv, provider_flag, "openai"])
+    assert getattr(openai, provider_attr) == "openai"
+    assert getattr(openai, model_attr) == DEFAULT_GENERATOR_MODEL
+    assert type(getattr(openai, model_attr)) is str
+    kept = parse_args([*argv, provider_flag, "openai", model_flag, DEFAULT_JUDGE_MODEL])
+    assert getattr(kept, model_attr) == DEFAULT_JUDGE_MODEL
+
+
+def test_panel_score_asks_for_a_model_when_the_provider_has_no_default(capsys):
+    argv = ["eval", "panel-score", "--answers", "x", "--product", "p", "--provider", "google-vertex"]
+    with pytest.raises(SystemExit) as exc:
+        parse_args(argv)
+    assert exc.value.code == 2
+    assert "--provider google-vertex has no default judge model; pass --model" in capsys.readouterr().err
+
+
 def test_the_legacy_cli_shim_exports_the_resolving_parse_args():
     import importlib.util
     from pathlib import Path

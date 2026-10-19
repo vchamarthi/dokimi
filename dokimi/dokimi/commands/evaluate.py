@@ -12,6 +12,8 @@ from pathlib import Path
 
 from dokimi.defaults import (
     DEFAULT_CONCURRENCY,
+    DEFAULT_GENERATOR_MODEL,
+    DEFAULT_GENERATOR_PROVIDER,
     DEFAULT_JUDGE_MODEL,
     DEFAULT_JUDGE_PROVIDER,
     JUDGE_MODEL_FOR_PROVIDER,
@@ -449,8 +451,10 @@ def register(sub, positive_int) -> None:
     # eval ragas
     ragas_p = eval_sub.add_parser("ragas", help="Run RAGAS meta-evaluation on answers")
     ragas_p.add_argument("--answers", required=True, help="Path to answers JSON file")
-    ragas_p.add_argument("--ragas-model", default=DEFAULT_JUDGE_MODEL,
-                         help=f"LLM for RAGAS judge (default: {DEFAULT_JUDGE_MODEL})")
+    ragas_p.add_argument("--ragas-model", default=JUDGE_MODEL_FOR_PROVIDER,
+                         help=("LLM for the RAGAS judge (default: the default judge for "
+                               f"--ragas-provider: {DEFAULT_JUDGE_MODEL} on {DEFAULT_JUDGE_PROVIDER}, "
+                               f"{DEFAULT_GENERATOR_MODEL} on {DEFAULT_GENERATOR_PROVIDER})"))
     ragas_p.add_argument("--ragas-provider", default=DEFAULT_JUDGE_PROVIDER, choices=["openai", "anthropic"],
                          help=f"Provider for RAGAS judge LLM (default: {DEFAULT_JUDGE_PROVIDER})")
     ragas_p.set_defaults(func=cmd_eval_ragas)
@@ -525,7 +529,11 @@ def register(sub, positive_int) -> None:
     panel_p.add_argument("--answers", required=True, help="Path to answers JSON file")
     panel_p.add_argument("--product", required=True, help="Product name (e.g., oneTBB)")
     panel_p.add_argument("--output", default=None, help="Output file (default: eval/{product}_panel.json)")
-    panel_p.add_argument("--model", default=DEFAULT_JUDGE_MODEL, help="Default LLM model for all judges")
+    panel_p.add_argument("--model", default=JUDGE_MODEL_FOR_PROVIDER,
+                         help=("Default LLM model for every role (default: the default judge "
+                               f"for --provider: {DEFAULT_JUDGE_MODEL} on {DEFAULT_JUDGE_PROVIDER} "
+                               f"and amazon-bedrock, {DEFAULT_GENERATOR_MODEL} on "
+                               f"{DEFAULT_GENERATOR_PROVIDER}; other providers need this flag)"))
     panel_p.add_argument("--provider", default=DEFAULT_JUDGE_PROVIDER, choices=["openai", "anthropic", "amazon-bedrock", "google-vertex", "openrouter", "openai-codex"])
     panel_p.add_argument("--roles", default=None,
                          help="Comma-separated judge roles (default: technical_expert,developer_advocate,doc_reviewer)")
