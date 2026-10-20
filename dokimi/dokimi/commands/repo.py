@@ -167,7 +167,10 @@ def cmd_repo_fetch(args: argparse.Namespace) -> None:
         print(f"✗ {exc}", file=sys.stderr)
         sys.exit(1)
     assert isinstance(tree, GitTree)
-    print(f"{tree.sha}\t{tree.git_dir}")
+    if args.json:
+        print(json.dumps({"sha": tree.sha, "git_dir": str(tree.git_dir)}, indent=2))
+    else:
+        print(f"{tree.sha}\t{tree.git_dir}")
 
 
 def cmd_repo_reach(args: argparse.Namespace) -> None:
@@ -353,6 +356,7 @@ def register(sub, positive_int) -> None:
 
     fetch_p = repo_sub.add_parser("fetch", help="Clone/fetch a pinned source and print its commit SHA")
     fetch_p.add_argument("source", help=source_help)
+    fetch_p.add_argument("--json", action="store_true", help="Print {sha, git_dir} as JSON instead of tab-separated")
     fetch_p.add_argument("--cache-dir", default=None, dest="cache_dir", help=cache_help)
     fetch_p.set_defaults(func=cmd_repo_fetch)
 

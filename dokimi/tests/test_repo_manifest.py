@@ -430,6 +430,18 @@ def test_repo_fetch_cli(tmp_path, capsys):
         _run_cli(["repo", "fetch", str(root)])
 
 
+def test_repo_fetch_cli_json(tmp_path, capsys, monkeypatch):
+    from dokimi.repos.source import GitTree
+
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    git_dir = tmp_path / "bare.git"
+    monkeypatch.setattr("dokimi.repos.open_source", lambda source, cache: GitTree(git_dir, sha))
+    _run_cli(["repo", "fetch", "https://example.invalid/r.git@main", "--json"])
+    assert json.loads(capsys.readouterr().out) == {"sha": sha, "git_dir": str(git_dir)}
+    _run_cli(["repo", "fetch", "https://example.invalid/r.git@main"])
+    assert capsys.readouterr().out == f"{sha}\t{git_dir}\n"
+
+
 def test_repo_subject_kind(tmp_path):
     path = tmp_path / "subject.toml"
     path.write_text(

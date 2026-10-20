@@ -16,7 +16,7 @@ SPDX-License-Identifier: Apache-2.0
 >
 > ```bash
 > python cli.py repo validate <dir | dir@rev | url@rev> --manifest <path> [--json]
-> python cli.py repo fetch <url@rev>     # bare, blob-less clone cached per URL
+> python cli.py repo fetch <url@rev> [--json]     # bare, blob-less clone cached per URL
 > ```
 >
 > Slice S3 adds harness profiles (§6) and the reach probe (§7):
