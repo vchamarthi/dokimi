@@ -240,6 +240,12 @@ def cmd_repo_budget(args: argparse.Namespace) -> None:
         print(f"✗ {exc}", file=sys.stderr)
         sys.exit(1)
     payload = budget(tree, profile.guidance_names, profile.import_max_depth)
+    if args.out:
+        try:
+            Path(args.out).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"✗ cannot write {args.out}: {exc}", file=sys.stderr)
+            sys.exit(1)
     if args.json:
         print(json.dumps(payload, indent=2))
     else:
@@ -439,6 +445,7 @@ def register(sub, positive_int) -> None:
                           help="Built-in profile name or a harness_profile.v1 YAML path; its guidance names "
                           "supply the file names, but the classification rules (root vs nested, off rule) are "
                           "hardcoded to Claude Code until other harnesses are measured (default: claude-code)")
+    budget_p.add_argument("--out", default=None, help="Write the full inventory as JSON to this file")
     budget_p.add_argument("--json", action="store_true", help="Print the full inventory as JSON")
     budget_p.add_argument("--fail-on-warning", action="store_true", dest="fail_on_warning",
                           help="Exit 1 when any warning is printed (for a CI gate)")

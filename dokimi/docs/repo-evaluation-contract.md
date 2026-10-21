@@ -45,7 +45,7 @@ SPDX-License-Identifier: Apache-2.0
 > Usage:
 >
 > ```bash
-> python cli.py repo budget <source> [--harness claude-code] [--json] [--fail-on-warning]
+> python cli.py repo budget <source> [--harness claude-code] [--out FILE] [--json] [--fail-on-warning]
 > ```
 >
 > `repo inspect` (§8.1) needs no manifest: a static look at what the tree offers an agent.
