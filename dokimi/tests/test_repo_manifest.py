@@ -421,6 +421,24 @@ def test_repo_validate_cli(tmp_path, capsys):
     assert "does not equal the directory name" in capsys.readouterr().err
 
 
+def test_repo_validate_out_writes_the_report(tmp_path, capsys):
+    root = _repo(tmp_path)
+    dest = tmp_path / "validate.json"
+    argv = ["repo", "validate", str(root), "--manifest", "dev/evals/repo-eval.yaml", "--out", str(dest)]
+    _run_cli(argv)
+    written = json.loads(dest.read_text(encoding="utf-8"))
+    assert written["ok"] is True and written["tasks"]["count"] == 2
+    assert "tasks:" in capsys.readouterr().out  # the summary still prints
+
+    _run_cli([*argv, "--json"])
+    assert json.loads(capsys.readouterr().out) == written
+
+    with pytest.raises(SystemExit) as exc:
+        _run_cli([*argv[:-1], str(tmp_path / "no" / "dir" / "v.json")])
+    assert exc.value.code == 1
+    assert "cannot write" in capsys.readouterr().err
+
+
 def test_repo_fetch_cli(tmp_path, capsys):
     root = _repo(tmp_path)
     sha = _git_commit(root)

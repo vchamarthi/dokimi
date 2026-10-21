@@ -37,6 +37,12 @@ def cmd_repo_validate(args: argparse.Namespace) -> None:
     if open_base is None:
         report.notes.append("task bases were not checked: the source has no git history")
 
+    if args.out:
+        try:
+            Path(args.out).write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"✗ cannot write {args.out}: {exc}", file=sys.stderr)
+            sys.exit(1)
     if args.json:
         print(json.dumps(report.to_dict(), indent=2))
     else:
@@ -339,6 +345,7 @@ def register(sub, positive_int) -> None:
                             help="Read the manifest from this local file instead of from the tree, as if it were "
                             "at --manifest (for a repository that has not added it yet)")
     validate_p.add_argument("--cache-dir", default=None, dest="cache_dir", help=cache_help)
+    validate_p.add_argument("--out", default=None, help="Write the full report as JSON to this file")
     validate_p.add_argument("--json", action="store_true", help="Print the full report as JSON")
     validate_p.set_defaults(func=cmd_repo_validate)
 

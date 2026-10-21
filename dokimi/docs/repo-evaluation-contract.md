@@ -15,7 +15,7 @@ SPDX-License-Identifier: Apache-2.0
 > subject kind:
 >
 > ```bash
-> python cli.py repo validate <dir | dir@rev | url@rev> --manifest <path> [--json]
+> python cli.py repo validate <dir | dir@rev | url@rev> --manifest <path> [--out FILE] [--json]
 > python cli.py repo fetch <url@rev>     # bare, blob-less clone cached per URL
 > ```
 >
