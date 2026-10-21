@@ -58,7 +58,7 @@ def cmd_repo_validate(args: argparse.Namespace) -> None:
             print(f"  note: {note}")
         for error in report.errors:
             print(f"  error: {error}", file=sys.stderr)
-    if not report.ok:
+    if not report.ok or (args.fail_on_warning and report.warnings):
         sys.exit(1)
 
 
@@ -340,6 +340,8 @@ def register(sub, positive_int) -> None:
                             "at --manifest (for a repository that has not added it yet)")
     validate_p.add_argument("--cache-dir", default=None, dest="cache_dir", help=cache_help)
     validate_p.add_argument("--json", action="store_true", help="Print the full report as JSON")
+    validate_p.add_argument("--fail-on-warning", action="store_true", dest="fail_on_warning",
+                            help="Exit 1 when the report has any warning (for a CI gate)")
     validate_p.set_defaults(func=cmd_repo_validate)
 
     scan_p = repo_sub.add_parser(

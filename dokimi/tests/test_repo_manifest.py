@@ -421,6 +421,18 @@ def test_repo_validate_cli(tmp_path, capsys):
     assert "does not equal the directory name" in capsys.readouterr().err
 
 
+def test_repo_validate_fail_on_warning(tmp_path, capsys):
+    guidance = {**MANIFEST["guidance"], "also_scan": ["no-such-file-*.md"]}
+    root = _repo(tmp_path, {**MANIFEST, "guidance": guidance})
+    argv = ["repo", "validate", str(root), "--manifest", "dev/evals/repo-eval.yaml"]
+    _run_cli(argv)  # a warning alone still passes by default
+    assert "warning: guidance/also_scan matches no file" in capsys.readouterr().out
+    with pytest.raises(SystemExit) as exc:
+        _run_cli([*argv, "--fail-on-warning"])
+    assert exc.value.code == 1
+    assert "warning:" in capsys.readouterr().out
+
+
 def test_repo_fetch_cli(tmp_path, capsys):
     root = _repo(tmp_path)
     sha = _git_commit(root)
