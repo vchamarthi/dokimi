@@ -138,6 +138,8 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
+          checksum: 2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f  # uv-x86_64-unknown-linux-gnu.tar.gz
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
           enable-cache: true
           cache-dependency-glob: |
             dokimi/requirements.lock.txt
@@ -186,10 +188,17 @@ jobs:
       # plus this leg's Python version, so a changed lock or leg starts clean.
       # Pruned before it is saved (`uv cache prune --ci` keeps wheels built from
       # source, such as scikit-network on 3.14, and drops downloaded ones). It is
-      # stored in the Actions cache, so a runner keeps nothing for the next job.
+      # saved to the Actions cache. cache-local-path keeps the on-disk copy in
+      # runner.temp, which the runner empties at the start and end of every job:
+      # without it a runner that is not GitHub-hosted would grow ~/.cache/uv.
+      # setup-uv's table of known uv checksums stops at 0.11.30, so `checksum`
+      # (the x86_64 glibc archive; any other runner fails closed) is not optional:
+      # without it the download would not be verified at all.
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
+          checksum: 2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f  # uv-x86_64-unknown-linux-gnu.tar.gz
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
           enable-cache: true
           cache-dependency-glob: dokimi/requirements.lock.txt
           cache-suffix: py${{ matrix.python-version }}
@@ -364,6 +373,8 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
+          checksum: ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225  # uv-x86_64-pc-windows-msvc.zip
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
           enable-cache: true
           cache-dependency-glob: dokimi/requirements.lock.txt
           cache-suffix: windows-py3.13
