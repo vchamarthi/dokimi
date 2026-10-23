@@ -126,13 +126,20 @@ def _task_from_data(
     missing = [k for k in ("id", "query", "references") if k not in data]
     if missing:
         raise ValueError(f"Explore task {path} missing required field(s): {missing}")
+    raw_refs = data["references"]
+    if not isinstance(raw_refs, list) or not all(
+        isinstance(ref, dict) and "path" in ref for ref in raw_refs
+    ):
+        raise ValueError(f"Explore task {path} references must be a list of entries with a 'path'")
     references = tuple(
         ExploreReference(path=str(ref["path"]), lines=_parse_lines(ref.get("lines")))
-        for ref in data["references"]
+        for ref in raw_refs
     )
     if not references:
         raise ValueError(f"Explore task {path} has no references")
     repo_root = data.get("repo_root")
+    if repo_root and not isinstance(repo_root, str):
+        raise ValueError(f"Explore task {path} repo_root must be a path string")
     if repo_root:
         resolved_root = (path.parent / repo_root).resolve()
     elif default_repo_root is not None:
