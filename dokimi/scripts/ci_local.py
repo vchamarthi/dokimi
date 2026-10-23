@@ -14,7 +14,7 @@ a step added to CI is run here without anyone editing this file.
 Differences from CI, all printed as notices:
 
 - `uses:` steps (checkout, setup-python, setup-micromamba, upload-artifact)
-  are skipped, and so are `pip install` steps: the tools come from the venv
+  are skipped, and so are `pip install` and `uv pip install` steps: the tools come from the venv
   `make dev` builds, which installs exactly what those steps install (`tools`
   subcommand below). Jobs that install the package itself (package-smoke,
   windows-smoke, conda-forge-deps) run in a throwaway venv on a copy of the
@@ -73,7 +73,11 @@ NEEDS_DOCKER = {"external-catalog-smoke"}
 NEEDS_TOOL = {"conda-forge-deps": "micromamba"}
 # Jobs that `pip install .`: run on a copy of the tree in a throwaway venv.
 ISOLATED = {"package-smoke", "windows-smoke", "conda-forge-deps"}
-PIP_INSTALL = re.compile(r"^\s*(python -m )?pip install\b")
+PIP_INSTALL = re.compile(r"^\s*(python -m |uv )?pip install\b")
+# `uv pip install` options that choose where or how CI installs, not what: `make dev`
+# runs its own `uv pip install --python <venv>`, so `tools` leaves them out.
+UV_FLAGS = {"--system", "--compile-bytecode", "--no-progress"}
+UV_VALUED = {"--python", "-p", "--cache-dir"}
 # pip options that take a value, by spelling, mapped to the short form `tools` emits.
 PAIRED = {"-r": "-r", "--requirement": "-r", "-c": "-c", "--constraint": "-c",
           "-e": "-e", "--editable": "-e"}
@@ -128,8 +132,26 @@ def load_workflows() -> list[tuple[str, dict]]:
     return out
 
 
+def install_args(line: str) -> list[str]:
+    """The arguments of one `pip install` / `uv pip install` line; for uv, without the
+    options in UV_FLAGS and UV_VALUED (a valued one is dropped with its value)."""
+    args = iter(shlex.split(PIP_INSTALL.sub("", line)))
+    if not line.lstrip().startswith("uv "):
+        return list(args)
+    kept: list[str] = []
+    for a in args:
+        if a in UV_FLAGS:
+            continue
+        if a.partition("=")[0] in UV_VALUED:
+            if "=" not in a:
+                next(args, "")
+            continue
+        kept.append(a)
+    return kept
+
+
 def tool_specs() -> list[str]:
-    """pip arguments of every `pip install` step outside the isolated jobs."""
+    """pip arguments of every `pip install` or `uv pip install` step outside the isolated jobs."""
     specs: list[str] = []
     for _, wf in load_workflows():
         default_wd = wf.get("defaults", {}).get("run", {}).get("working-directory", ".")
@@ -141,7 +163,7 @@ def tool_specs() -> list[str]:
                 for line in str(step.get("run", "")).splitlines():
                     if not PIP_INSTALL.match(line):
                         continue
-                    args = iter(shlex.split(PIP_INSTALL.sub("", line)))
+                    args = iter(install_args(line))
                     for a in args:
                         # `-r f`, `-rf`, `--requirement f`, `--requirement=f`
                         flag, eq, value = a.partition("=")

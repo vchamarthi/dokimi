@@ -142,6 +142,57 @@ def test_tool_specs_keep_constraint_and_editable_pairs(env: dict[str, Any]) -> N
     ]
 
 
+def test_tool_specs_read_uv_pip_install_without_its_target_flags(env: dict[str, Any]) -> None:
+    """`uv pip install --system ... --compile-bytecode` says where CI installs; `make dev` installs
+    into its own venv, so only the hash check and the locks reach it, in order."""
+    wf = ("on: pull_request\njobs:\n  a:\n    steps:\n"
+          "      - run: uv pip install --system --require-hashes --compile-bytecode"
+          " -r one.txt -r two.txt\n")
+    (cl.WORKFLOWS / "x.yml").write_text(wf)
+    root = env["root"]
+    assert cl.tool_specs() == ["--require-hashes", "-r", str(root / "one.txt"), "-r", str(root / "two.txt")]
+
+
+def test_tool_specs_drop_uv_interpreter_options_with_their_values(env: dict[str, Any]) -> None:
+    """`--python python` and `--cache-dir=/c` leave no `python` or path behind to be read as a package."""
+    wf = ("on: pull_request\njobs:\n  a:\n    steps:\n"
+          "      - run: uv pip install --python python --cache-dir=/c -p 3.13 --require-hashes -r l.txt ruff\n")
+    (cl.WORKFLOWS / "x.yml").write_text(wf)
+    root = env["root"]
+    assert cl.tool_specs() == ["--require-hashes", "-r", str(root / "l.txt"), "ruff"]
+
+
+def test_tool_specs_merge_pip_and_uv_lines_and_keep_pip_flags(env: dict[str, Any]) -> None:
+    """A pip line keeps every flag it has, even one uv would drop; a hash flag seen on both is listed once."""
+    wf = ("on: pull_request\njobs:\n  a:\n    steps:\n"
+          "      - run: python -m pip install --require-hashes --no-compile -r one.txt\n"
+          "      - run: uv pip install --system --require-hashes -r one.txt -r two.txt\n")
+    (cl.WORKFLOWS / "x.yml").write_text(wf)
+    root = env["root"]
+    assert cl.tool_specs() == ["--require-hashes", "--no-compile", "-r", str(root / "one.txt"),
+                               "-r", str(root / "two.txt")]
+    wf = "on: pull_request\njobs:\n  a:\n    steps:\n      - run: pip install --system x\n"
+    (cl.WORKFLOWS / "x.yml").write_text(wf)
+    assert cl.tool_specs() == ["--system", "x"]
+
+
+def test_uv_pip_install_line_dropped_rest_of_step_runs(env: dict[str, Any]) -> None:
+    """The tools come from `make dev`: a uv install line is not run, the lines after it are."""
+    wf = ("on: pull_request\njobs:\n  a:\n    steps:\n      - run: |\n"
+          "          uv pip install --system --require-hashes -r l.txt\n          echo after\n")
+    (cl.WORKFLOWS / "x.yml").write_text(wf)
+    cl.run(ns())
+    assert [c["cmd"][-1].strip() for c in env["calls"]] == ["echo after"]
+
+
+def test_workflow_tool_specs_carry_no_uv_target_flags() -> None:
+    """The real workflows install with `uv pip install --system`; `make dev` must not receive it,
+    or it would install into the system interpreter instead of .venv."""
+    specs = cl.tool_specs()
+    assert "--require-hashes" in specs
+    assert not {"--system", "--compile-bytecode", "--python"} & set(specs)
+
+
 def test_pip_install_line_dropped_rest_of_step_runs(env: dict[str, Any]) -> None:
     """A step that starts with pip install and continues still runs its other lines."""
     wf = "on: pull_request\njobs:\n  a:\n    steps:\n      - run: |\n          pip install x\n          echo after\n      - run: pip install y\n"
