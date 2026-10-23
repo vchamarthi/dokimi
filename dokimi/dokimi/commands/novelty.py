@@ -74,6 +74,7 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
                   "at a dollar figure.", file=sys.stderr)
         return
 
+    placebo_text = _read_placebo(args.placebo_text)
     extractor, answerer, judge = _clients(args)
     config = AnalyzeConfig(
         artifact_ref=args.artifact,
@@ -85,10 +86,7 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
         budgets=tuple(args.budgets),
         concurrency=args.concurrency,
         allow_self_judge=args.allow_self_judge,
-        placebo_text=(
-            Path(args.placebo_text).read_text(encoding="utf-8")
-            if args.placebo_text else None
-        ),
+        placebo_text=placebo_text,
         cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         seed=args.seed,
         include_resources=args.include_resources,
@@ -168,6 +166,7 @@ def cmd_novelty_probe(args: argparse.Namespace) -> None:
     for note in verdict.notes:
         print(note, file=sys.stderr)
     settings = _settings(args)
+    placebo_text = _read_placebo(args.placebo_text)
     extractor, answerer, judge = _clients(args)
     if saved.get("extractor") == answerer.model:
         print(f"WARNING: {answerer.model} extracted these atoms, so the model under measurement "
@@ -189,9 +188,7 @@ def cmd_novelty_probe(args: argparse.Namespace) -> None:
             atoms, probe_set.probes, verdict.text, answerer=answerer, judge=judge,
             arms=_arms(args.arms), concurrency=args.concurrency,
             allow_self_judge=args.allow_self_judge, seed=args.seed,
-            placebo_text=(
-                Path(args.placebo_text).read_text(encoding="utf-8") if args.placebo_text else None
-            ),
+            placebo_text=placebo_text,
         )
     except (SelfJudgeError, ValueError) as exc:
         raise SystemExit(str(exc)) from None
@@ -793,6 +790,16 @@ def _settings(args: argparse.Namespace) -> RunSettings:
 
     return resolve_settings(getattr(args, "tier", None), {
         flag: getattr(args, flag, default) for flag, default in FLAG_DEFAULTS.items()})
+
+
+def _read_placebo(path: str | None) -> str | None:
+    """The `--placebo-text` file, or an exit that names it when it cannot be read."""
+    if not path:
+        return None
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"cannot read --placebo-text {path}: {exc}") from None
 
 
 def _arms(spec: str) -> tuple[str, ...]:

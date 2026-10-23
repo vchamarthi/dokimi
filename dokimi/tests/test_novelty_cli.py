@@ -121,6 +121,23 @@ def test_a_missing_artifact_exits_with_a_message(capsys):
 
 
 
+@pytest.mark.parametrize("make_path", [
+    lambda tmp_path: tmp_path / "missing.txt",
+    lambda tmp_path: tmp_path,
+    lambda tmp_path: (tmp_path / "bin.txt").write_bytes(b"\xff\xfe\x00") and tmp_path / "bin.txt",
+], ids=["missing", "directory", "not-utf8"])
+def test_an_unreadable_placebo_text_exits_with_a_message(tmp_path, make_path):
+    skill = tmp_path / "skill"
+    skill.mkdir()
+    (skill / "SKILL.md").write_text("---\nname: s\ndescription: d\n---\n\n# S\n\nText.\n",
+                                    encoding="utf-8")
+    placebo = make_path(tmp_path)
+    args = _parse("novelty", "analyze", "--artifact", f"skill:{skill}",
+                  "--placebo-text", str(placebo))
+    with pytest.raises(SystemExit, match=f"^cannot read --placebo-text {re.escape(str(placebo))}"):
+        args.func(args)
+
+
 def test_coverage_note_printed_to_stderr_for_atoms(tmp_path, monkeypatch, capsys):
     """The coverage note is printed to stderr on entry-point run."""
     skill = tmp_path / "s" / "SKILL.md"
