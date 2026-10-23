@@ -412,6 +412,21 @@ def test_probe_refuses_a_stale_answer_key_before_building_a_client(tmp_path):
         args.func(args)
 
 
+def test_probe_exits_with_a_message_on_an_unreadable_placebo_text(tmp_path):
+    from dokimi.novelty.atoms import save_atoms
+    from dokimi.novelty.bundle import load_bundle
+
+    root = _bundle_skill(tmp_path)
+    bundle = load_bundle(f"skill:{root}", include_resources=True)
+    atoms = tmp_path / "atoms.json"
+    save_atoms([], [], atoms, extractor="e", cap=None, bundle=bundle.summary())
+    missing = tmp_path / "missing.txt"
+    args = _parse("novelty", "probe", "--artifact", f"skill:{root}", "--atoms", str(atoms),
+                  "--placebo-text", str(missing))
+    with pytest.raises(SystemExit, match=f"^cannot read --placebo-text {re.escape(str(missing))}"):
+        args.func(args)
+
+
 def test_shorten_restricts_a_bundle_answer_key_to_the_entry_point(tmp_path, capsys):
     from dokimi.novelty.atoms import save_atoms
     from dokimi.novelty.bundle import load_bundle
