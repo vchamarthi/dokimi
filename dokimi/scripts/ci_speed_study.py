@@ -10,8 +10,8 @@ archive and venv. Windows: per installer one excluded primer, then (pip|uv) x 2 
 (venv, tool bootstrap, wheel build, unlocked wheel install, installed smoke, hash-locked
 install, two test files). Linux: per installer one excluded install-only primer, then
 (pip|uv) x (load|worksteal) x 2 blocks running the real CI pytest command. Each condition
-therefore has an identical same-condition replicate in the same VM, which measures the
-variability the comparisons are judged against. uv lives in its own tools env, installed
+therefore has a same-condition second run in the same VM; the two-value range is reported as
+a descriptive observation to read the comparisons against, not as a variability estimate. uv lives in its own tools env, installed
 with --require-hashes from the uv block of requirements-ci.lock.txt; its provisioning time
 is recorded and charged once per hypothetical CI job. Caches are per installer and warmed by
 the primers. Scope: clean environments, not the global-Python CI jobs; the Windows wheel
@@ -76,7 +76,9 @@ BASE_WIN_TESTS = 90
 # coverage.xml filenames (relative to the package dir); "blob" is the Git blob id of the file
 # at BASE, and the class applies only while the archive's blob equals it. Only *covered*
 # differences on these lines are classified; executable-line differences and every other
-# covered difference stay fatal.
+# covered difference stay fatal. The blob ids are the Git objects of the frozen BASE tree
+# (git ls-tree, race-branch-blob-proof-94.json). A line covered by exactly one installer or
+# distribution level is not tolerated (see coverage_report).
 RACE_BRANCHES = {
     "process.py": {
         "path": "dokimi/dokimi/process.py", "blob": "c1d43706103ab06088d01296e5cb727cb01bb34d",
@@ -596,10 +598,17 @@ def coverage_report(runs: list[dict], blobs: dict[str, str], limit: int = 200) -
     a covered difference on a RACE_BRANCHES line whose file blob equals the pinned BASE blob is
     "preregistered"; every other covered difference is "unregistered". An executable-line
     difference is always fatal, whatever the line. Per differing line the run ids that do and
-    do not cover it are listed (bounded), with the pairwise counts for same-condition replicates."""
+    do not cover it are listed (bounded), with the pairwise counts for same-condition replicates.
+
+    The tolerance rests on the premise that the line varies with scheduling, not with the
+    condition. A preregistered line whose covering set equals exactly one installer level or
+    one distribution level, with no variation inside any same-condition pair, is therefore not
+    tolerated: it is "condition-aligned", unresolved, and the coverage guard for it fails."""
     cov = {r["id"]: r["result"]["coverage"] for r in runs}
     ids = [r["id"] for r in runs]
     cond = {r["id"]: cond_key(r) for r in runs}
+    levels = {f"{k}={v}": {r["id"] for r in runs if r[k] == v}
+              for k in ("installer", "dist") for v in sorted({r[k] for r in runs})}
     files = sorted({f for c in cov.values() for f in c})
     lines: list[dict] = []
     for f in files:
@@ -609,11 +618,16 @@ def coverage_report(runs: list[dict], blobs: dict[str, str], limit: int = 200) -
                 has = [i for i in ids if n in sets[i]]
                 rb = RACE_BRANCHES.get(f)
                 known = bool(rb) and n in rb["lines"] and blobs.get(rb["path"]) == rb["blob"]
+                aligned = [name for name, members in levels.items() if set(has) == members]
+                varies = any(0 < len(set(has) & m) < len(m) for m in
+                             ({i for i in ids if cond[i] == c} for c in set(cond.values())))
                 cls = "fatal-executable" if kind == "executable" else (
-                    "preregistered" if known else "unregistered")
+                    "unregistered" if not known else
+                    "condition-aligned" if aligned and not varies else "preregistered")
                 lines.append({"file": f, "line": n, "kind": kind, "class": cls, "covered_by": has,
                               "not_covered_by": [i for i in ids if i not in has],
-                              "covered_by_conditions": dict(Counter(cond[i] for i in has))})
+                              "covered_by_conditions": dict(Counter(cond[i] for i in has)),
+                              "aligned_with_level": aligned, "same_condition_varies": varies})
     pairs = []
     for x, a in enumerate(ids):
         for b in ids[x + 1:]:
@@ -629,6 +643,10 @@ def coverage_report(runs: list[dict], blobs: dict[str, str], limit: int = 200) -
             "lines": lines[:limit], "lines_truncated": len(lines) > limit,
             "executable_equal": by_class["fatal-executable"] == 0,
             "no_unregistered_covered_differences": by_class["unregistered"] == 0,
+            "no_condition_aligned_differences": by_class["condition-aligned"] == 0,
+            "unresolved_condition_aligned": [
+                {k: d[k] for k in ("file", "line", "aligned_with_level")}
+                for d in lines if d["class"] == "condition-aligned"][:limit],
             "preregistered_rationale": {f: rb["lines"] for f, rb in RACE_BRANCHES.items()},
             "preregistered_blobs": {rb["path"]: rb["blob"] for rb in RACE_BRANCHES.values()}}
 
@@ -712,6 +730,7 @@ def validate(runs: list[dict], family: str, blobs: dict[str, str]) -> tuple[dict
         cov = coverage_report(meas, blobs) if meas else None
         g["coverage_executable_lines_equal"] = bool(cov) and cov["executable_equal"]
         g["coverage_no_unregistered_differences"] = bool(cov) and cov["no_unregistered_covered_differences"]
+        g["coverage_no_condition_aligned_differences"] = bool(cov) and cov["no_condition_aligned_differences"]
         notes += [f"{r['id']} git test not passed: {x}" for r in meas
                   for x in git_tests_skipped(r["result"]["junit"])][:20]
     return g, cov, notes
@@ -791,7 +810,9 @@ def distribution_value(raw: dict) -> dict:
                          for d in ("load", "worksteal"))
             out[inst] = {"load_mean": mean(t(inst, "load")), "worksteal_mean": mean(t(inst, "worksteal")),
                          "worksteal_saved_seconds": saved, "saved_by_block": blocks,
-                         "sign_consistent_across_blocks": len({v > 0 for v in blocks.values()}) == 1,
+                         # both blocks measured, and one strictly positive or strictly negative sign
+                         "sign_consistent_across_blocks": len(blocks) == 2 and (
+                             all(v > 0 for v in blocks.values()) or all(v < 0 for v in blocks.values())),
                          "same_condition_range_max_seconds": spread,
                          "exceeds_same_condition_range": abs(saved) > spread}
     return out
@@ -808,7 +829,8 @@ LINUX_TEST_GUARDS = [
     "tracked_tree_unchanged_by_tests", "junit_ids_and_results", "workers_and_items",
     "items_equal_base_ci", "pass_skip_counts_equal_base_ci", "git_dependent_tests_not_skipped",
     "outcomes_report", "journeys_report", "outcomes_verdict_pass",
-    "coverage_executable_lines_equal", "coverage_no_unregistered_differences"]
+    "coverage_executable_lines_equal", "coverage_no_unregistered_differences",
+    "coverage_no_condition_aligned_differences"]
 VM_SCOPE = "single VM, one repeat of the five; no installer or distribution decision from one VM"
 
 
@@ -884,10 +906,37 @@ def _self_coverage() -> None:
 
     same_cov = rep(base, base, blobs)
     check(same_cov["strict_identical"] and same_cov["no_unregistered_covered_differences"], "identical rejected")
-    reg = rep(base, racy, blobs)  # 565, 566 and 570 differ: all pre-registered
+    def grid(racy_runs: set[tuple[str, str, int]], known: dict[str, str] = blobs) -> dict:
+        """The eight real measured runs (two blocks of the four conditions); `racy_runs` cover the race lines."""
+        conds = [(i, d) for i in ("pip", "uv") for d in ("load", "worksteal")]
+        runs = [_syn_run(f"{i}-{d}-b{b}", i, d, b, s, racy if (i, d, b) in racy_runs else base)
+                for s, (b, (i, d)) in enumerate((b, c) for b in (1, 2) for c in conds)]
+        return coverage_report(runs, known)
+
+    # documented same-condition variability: one racy run in each of two conditions
+    reg = grid({("pip", "load", 1), ("uv", "worksteal", 2)})  # 565, 566 and 570 differ
     check(not reg["strict_identical"] and reg["by_class"] == {"preregistered": 3}
-          and reg["no_unregistered_covered_differences"] and reg["executable_equal"],
-          "pre-registered race lines not classified (strict result must stay raw)")
+          and reg["no_unregistered_covered_differences"] and reg["no_condition_aligned_differences"]
+          and reg["executable_equal"] and reg["same_condition_pairs_differing"] == 2,
+          "pre-registered race lines with same-condition variability not classified")
+    # every uv run covers the race lines, no pip run does: exact installer alignment
+    inst = grid({("uv", d, b) for d in ("load", "worksteal") for b in (1, 2)})
+    check(not inst["strict_identical"] and inst["by_class"] == {"condition-aligned": 3}
+          and not inst["no_condition_aligned_differences"] and inst["executable_equal"]
+          and inst["unresolved_condition_aligned"][0]["aligned_with_level"] == ["installer=uv"]
+          and inst["same_condition_pairs_differing"] == 0, "exact installer alignment tolerated")
+    # every worksteal run covers them, no load run does: exact distribution alignment
+    dist = grid({(i, "worksteal", b) for i in ("pip", "uv") for b in (1, 2)})
+    check(dist["by_class"] == {"condition-aligned": 3} and not dist["no_condition_aligned_differences"]
+          and dist["unresolved_condition_aligned"][0]["aligned_with_level"] == ["dist=worksteal"],
+          "exact distribution alignment tolerated")
+    # all uv runs but one: not an exact level, and the uv-load pair varies inside the condition
+    almost = grid({("uv", d, b) for d in ("load", "worksteal") for b in (1, 2)} - {("uv", "load", 2)})
+    check(almost["by_class"] == {"preregistered": 3} and almost["no_condition_aligned_differences"],
+          "partial installer coverage with same-condition variability rejected")
+    # blob mismatch: the aligned line is unregistered, not tolerated
+    check(not grid({("uv", d, b) for d in ("load", "worksteal") for b in (1, 2)}, {})
+          ["no_unregistered_covered_differences"], "aligned line with an unbound blob accepted")
     check(not rep(base, racy, {})["no_unregistered_covered_differences"], "blob-unbound class accepted")
     check(not rep(base, racy, {proc["path"]: "0" * 40})["no_unregistered_covered_differences"],
           "changed source blob still accepted")
@@ -959,6 +1008,26 @@ def _self_claims() -> None:
     for n in ("distribution_test_seconds", "test_run_equivalence"):
         check(bad[n]["status"] == "unvalidated" and bad[n]["value"] is None, f"{n} shows a number after a failed guard")
     check(bad["distribution_test_seconds"]["unvalidated_diagnostic"] is not None, "diagnostic dropped")
+    aligned = claim_status({**guards, "coverage_no_condition_aligned_differences": False}, raw, 5.0, "linux")
+    check(aligned["installer_install_seconds"]["status"] == "vm_validated", "alignment guard gated the installer claim")
+    for n in ("distribution_test_seconds", "test_run_equivalence"):
+        check(aligned[n]["status"] == "unvalidated" and aligned[n]["value"] is None
+              and aligned[n]["failed_guards"] == ["coverage_no_condition_aligned_differences"],
+              f"{n} validated despite condition-aligned coverage")
+    # sign consistency needs both blocks and one strict sign; zero or one block is no evidence
+    sign = distribution_value(raw)["pip"]["sign_consistent_across_blocks"]
+    check(sign is True, "two positive blocks not consistent")
+    for drop, why in ((lambda m: m["block"] == 2, "one block"),
+                      (lambda m: m["block"] == 2 and m["dist"] == "load" and m["installer"] == "pip", "one block")):
+        part = {**raw, "measured": [m for m in meas if not drop(m)]}
+        check(not distribution_value(part)["pip"]["sign_consistent_across_blocks"], f"{why} counted as consistent")
+    zero = [dict(m, stages={"tests": 100}) if m["installer"] == "pip" and m["block"] == 2 else m for m in meas]
+    check(not distribution_value({**raw, "measured": zero})["pip"]["sign_consistent_across_blocks"],
+          "a zero difference counted as consistent")
+    flipped = [dict(m, stages={"tests": 100}) if m["installer"] == "pip" and m["block"] == 2
+               and m["dist"] == "load" else m for m in meas]  # block 2 load 100 < worksteal 114: negative
+    check(not distribution_value({**raw, "measured": flipped})["pip"]["sign_consistent_across_blocks"],
+          "opposite block signs counted as consistent")
     worse = claim_status({**guards, "pip_versions_equal": False}, raw, 5.0, "linux")
     check(all(c["status"] == "unvalidated" for n, c in worse.items() if n != "test_run_equivalence")
           and worse["installer_install_seconds"]["value"] is None, "pip mismatch left a claim validated")
@@ -1046,11 +1115,23 @@ def main(argv: list[str] | None = None) -> int:
         "inside claims.installer_install_seconds only",
         "one repeat per VM; each claim is vm_validated or unvalidated; no decision from one VM; "
         "worksteal is not chosen from noise-sized differences (compare with the same-condition range)",
-        "two blocks per VM, block 2 the reverse of block 1, so every condition has an identical "
-        "same-condition replicate and equal mean position; the pytest seed is fixed (CI's is random)",
+        "two blocks per VM, block 2 the reverse of block 1: 10 runs per VM, two per condition, so "
+        "5 same-condition two-run comparisons per condition across the five VMs; equal mean position; "
+        "the pytest seed is fixed (CI's is random)",
+        "same_condition_range_max_seconds and exceeds_same_condition_range are descriptive "
+        "observations of a two-value range per VM (partly adjacency, partly drift across positions), "
+        "not a significance test or a general variability estimate; sign_consistent_across_blocks "
+        "is true only with both blocks measured and one strictly positive or strictly negative sign",
         "coverage: executable-line equality is strict; covered-line differences are reported raw "
         "(strict) and classified, only the pre-registered RACE_BRANCHES lines (bound to BASE blob ids) "
-        "are tolerated, everything else is fatal for test_run_equivalence and distribution claims",
+        "are tolerated, everything else is fatal for test_run_equivalence and distribution claims; a "
+        "pre-registered line whose covering set equals exactly one installer or distribution level, "
+        "with no variation inside a same-condition pair, is condition-aligned: unresolved and "
+        "unvalidated, never tolerated, and gates test_run_equivalence and distribution_test_seconds",
+        "pip equality is the pip version equal across every run of a VM, not the lock's pip: on Linux "
+        "the venv pip is the runner Python's ensurepip bootstrap (equal within a VM, not necessarily "
+        "26.2.1); only the post-lock manifests are strict. The baseline is not re-bootstrapped "
+        "differently from the original CI",
         "pip and uv installs are compared by package names and versions plus equal venv pip; built "
         "wheels (scikit-network sdist on Linux) are not compared byte for byte",
         "Windows wheel_install is a pinned, loose resolve (constraints from primer-pip), controlled "
