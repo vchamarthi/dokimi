@@ -20,12 +20,14 @@ import json
 import os
 import platform
 import random
+import re
 import shutil
 import stat
 import subprocess
 import sys
 import tarfile
 import time
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -40,6 +42,9 @@ UV_URL = (
 # Digest of this release asset from the GitHub REST release metadata for the tag
 # above; empty fails closed.
 UV_ZIP_SHA256 = "a38b8d1902b7cfbc76b423ba1bb456f623f42064cdc72628b6075b89afd1019a"
+ALLOWED_HOSTS = {"github.com"}
+MAX_UV_EXE_BYTES = 200 << 20
+MAX_JUNIT_BYTES = 5 << 20
 TOOLS = ["pip==26.2.2", "build==1.6.1", "setuptools==84.2.1", "wheel==0.48.0",
          "packaging==26.3", "pyproject-hooks==1.3.3", "colorama==0.4.6"]
 TEST_FILES = ["tests/test_cli_help.py", "tests/test_console_encoding.py"]
@@ -161,27 +166,53 @@ def prepare_source(repo: Path, lab: Path) -> dict:
 
 
 def prepare_tools(lab: Path, log: Path, env: dict[str, str]) -> dict:
-    """One-off: dedicated uv tools dir and the shared bootstrap wheelhouse. Untimed overhead."""
+    """One-off: dedicated uv tools dir and the shared bootstrap wheelhouse. Untimed overhead.
+
+    `uv_only_seconds` (download, checksum, extraction, version call) is the cost only the uv arm
+    needs; `wheelhouse_seconds` is common to both installers; `overhead_seconds` is both.
+    """
     t0 = time.perf_counter()
     if len(UV_ZIP_SHA256) != 64:
         raise StageError("UV_ZIP_SHA256 is not set")
+    check_https_url(UV_URL)
     tools = lab / "uv-tools"
     tools.mkdir(parents=True)
     zpath = tools / "uv.zip"
-    with urllib.request.urlopen(UV_URL, timeout=120) as resp, zpath.open("wb") as out:  # noqa: S310
+    # Fixed https://github.com URL (validated above); the bytes are rejected below unless
+    # their SHA-256 equals the pinned release digest, and nothing runs before that check.
+    with urllib.request.urlopen(UV_URL, timeout=120) as resp, zpath.open("wb") as out:  # noqa: S310  # nosec B310
         shutil.copyfileobj(resp, out)
     if sha256(zpath) != UV_ZIP_SHA256:
         raise StageError("uv archive sha256 mismatch")
+    uv_exe = tools / "uv.exe"
     with zipfile.ZipFile(zpath) as zf:
-        (tools / "uv.exe").write_bytes(zf.read("uv.exe"))
-    uv_version = capture([str(tools / "uv.exe"), "--version"], tools)
+        if zf.getinfo("uv.exe").file_size > MAX_UV_EXE_BYTES:
+            raise StageError("uv.exe in archive is larger than expected")
+        uv_exe.write_bytes(zf.read("uv.exe"))
+    uv_exe_sha256 = sha256(uv_exe)
+    uv_version = capture([str(uv_exe), "--version"], tools).strip()
+    if not re.fullmatch(rf"uv {re.escape(UV_VERSION)}( \(.*\))?", uv_version):
+        raise StageError(f"uv --version is {uv_version!r}, expected uv {UV_VERSION}")
+    uv_only = time.perf_counter() - t0
+    t1 = time.perf_counter()
     wheelhouse = lab / "wheelhouse"
     run([sys.executable, "-m", "pip", "download", "--dest", str(wheelhouse), *TOOLS],
         log, cwd=lab, env=env, limit=300)
-    return {"uv_exe": str(tools / "uv.exe"), "uv_version": uv_version.strip(),
-            "uv_zip_sha256": UV_ZIP_SHA256, "wheelhouse": str(wheelhouse),
+    wheelhouse_seconds = time.perf_counter() - t1
+    return {"uv_exe": str(uv_exe), "uv_version": uv_version,
+            "uv_zip_sha256": UV_ZIP_SHA256, "uv_exe_sha256": uv_exe_sha256,
+            "wheelhouse": str(wheelhouse),
             "wheelhouse_sha256": {p.name: sha256(p) for p in sorted(wheelhouse.glob("*.whl"))},
+            "uv_only_seconds": round(uv_only, 3),
+            "wheelhouse_seconds": round(wheelhouse_seconds, 3),
             "overhead_seconds": round(time.perf_counter() - t0, 3)}
+
+
+def check_https_url(url: str) -> None:
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme != "https" or parts.hostname not in ALLOWED_HOSTS:
+        raise StageError(f"download URL not allowed: {url}")
+
 
 MANIFEST_PY = (
     "import importlib.metadata as m,json;"
@@ -328,11 +359,19 @@ class Arm:
 
     @staticmethod
     def parse_tests(collect_text: str, junit: Path) -> dict:
-        import xml.etree.ElementTree as ET  # noqa: S405 - our own pytest output
+        import xml.etree.ElementTree as ET  # noqa: S405  # nosec B405 - own pytest output, checked below
 
         collected = sorted(line.strip() for line in collect_text.splitlines() if "::" in line)
         cases = {}
-        for tc in ET.parse(junit).getroot().iter("testcase"):
+        data = junit.read_bytes()
+        if len(data) > MAX_JUNIT_BYTES:
+            raise StageError(f"JUnit file is {len(data)} bytes, over {MAX_JUNIT_BYTES}")
+        if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+            raise StageError("JUnit file declares a DTD or entity")
+        # Local file written by the pinned pytest in this job, size-bounded and free of
+        # DTD/entity declarations by the checks above.
+        root = ET.fromstring(data)  # noqa: S314  # nosec B314
+        for tc in root.iter("testcase"):
             bad = [c.tag for c in tc if c.tag in ("failure", "error", "skipped")]
             cases[f"{tc.get('classname')}.{tc.get('name')}"] = bad[0] if bad else "passed"
         executed = len(cases)
@@ -405,8 +444,11 @@ def main(argv: list[str] | None = None) -> int:
                      "limits": ["hosted CI-step experiment in clean virtualenvs; not the "
                                 "global-Python windows-smoke job and no queue or end-to-end "
                                 "speedup claim",
-                                "uv download/setup is a one-off overhead excluded from the timed "
-                                "arms; it must be counted in any net assessment",
+                                "total setup (overhead_seconds) is excluded from the timed arms and "
+                                "includes the common bootstrap wheelhouse download "
+                                "(wheelhouse_seconds); only uv_only_seconds (uv download, "
+                                "checksum, extraction, version call) is uv-specific and must be "
+                                "counted in any net assessment of uv",
                                 "timed stages exclude collection, manifests, pip check and "
                                 "origin checks; wall_seconds includes them",
                                 "no statistical significance claim; one measured pair per job"]}
