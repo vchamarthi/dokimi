@@ -3,8 +3,9 @@
 
 # CI speed study, experiment branch only. Manual, fork only. Not the project's CI:
 # the real workflow is on main. Each job is one VM running dokimi/scripts/ci_speed_study.py,
-# which builds every condition from a git archive of the base commit and writes
-# summary.json plus bounded logs and results.
+# which builds every condition from a git archive of the base commit (94e3eb12) and writes
+# summary.json plus bounded logs and results. Exit 3 means a validity guard failed (the
+# summary says which claims are unvalidated), exit 1 a setup or run failure.
 name: ci
 
 on:
@@ -50,6 +51,13 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+      # Synthetic checks of the study's own guards (unknown coverage differences, changed
+      # executable lines, pip mismatch, order balance, claim gating, process-tree kill),
+      # before any measurement. They use no repository code.
+      - name: Self-check the study guards
+        shell: bash
+        timeout-minutes: 3
+        run: python dokimi/scripts/ci_speed_study.py --self-check
       - name: Run the study
         shell: bash
         timeout-minutes: 52

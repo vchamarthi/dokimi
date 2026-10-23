@@ -3,19 +3,22 @@
 
 """Hosted CI speed study: pip vs uv installs, and pytest-xdist load vs worksteal.
 
-One job (one VM) runs one repeat. Windows: per installer one excluded primer, then
-the two measured arms in seeded random order (venv, tool bootstrap, wheel build,
-unlocked wheel install, installed smoke, hash-locked install, two test files).
-Linux: per installer one excluded install-only primer, then four measured
-conditions (pip|uv) x (load|worksteal) in seeded random order, each with a fresh
-source archive and venv, running the real CI pytest command. uv lives in its own
-tools env, installed with --require-hashes from the uv block of
-requirements-ci.lock.txt; its provisioning time is recorded and must be counted
-against uv. Caches are per installer and warmed by the primers. Scope: clean
-environments, not the global-Python CI jobs; the Windows wheel install is a pinned loose
-resolve, and only the Windows smoke path and the Linux test job are covered, not all
-workflows. Every child runs in its own process group and its tree is killed on timeout.
-Standard library only.
+One job (one VM) runs one repeat, in two measured blocks with the condition order of
+block 2 the reverse of block 1 (every condition's mean position is then equal, and the
+block 1 order follows a Williams square over the repeats). Each condition has a fresh source
+archive and venv. Windows: per installer one excluded primer, then (pip|uv) x 2 blocks
+(venv, tool bootstrap, wheel build, unlocked wheel install, installed smoke, hash-locked
+install, two test files). Linux: per installer one excluded install-only primer, then
+(pip|uv) x (load|worksteal) x 2 blocks running the real CI pytest command. Each condition
+therefore has an identical same-condition replicate in the same VM, which measures the
+variability the comparisons are judged against. uv lives in its own tools env, installed
+with --require-hashes from the uv block of requirements-ci.lock.txt; its provisioning time
+is recorded and charged once per hypothetical CI job. Caches are per installer and warmed by
+the primers. Scope: clean environments, not the global-Python CI jobs; the Windows wheel
+install is a pinned loose resolve, and only the Windows smoke path and the Linux test job are
+covered, not all workflows. Every child runs in its own process group and its tree is killed
+on timeout. Claims are gated one by one: a failed guard leaves the numbers it covers marked
+unvalidated. Standard library only. `--self-check` runs synthetic checks of these guards.
 """
 
 from __future__ import annotations
@@ -25,7 +28,6 @@ import hashlib
 import json
 import os
 import platform
-import random
 import re
 import shutil
 import signal
@@ -39,17 +41,22 @@ import xml.etree.ElementTree as ET  # nosec B405 - own pytest output, size-check
 from collections import Counter
 from pathlib import Path
 
-BASE = "92d92d3a7337851540dcce969a2095df5b83b93f"
+BASE = "94e3eb12ac17b6f714d5519dc910f64d08dfff3f"
 BENCH_FILES = {".github/workflows/ci.yml", "dokimi/scripts/ci_speed_study.py"}
 UV_VERSION = "0.13.4"
-WIN_TOOLS = ["pip==26.2.2", "build==1.6.1", "setuptools==84.2.1", "wheel==0.48.0",
-             "packaging==26.3", "pyproject-hooks==1.3.3", "colorama==0.4.6"]
+# Pins read from the CI lock of BASE (requirements-ci.lock.txt) and checked against these
+# at run time; each is installed with the lock's own hashes. wheel is not in the lock.
+LOCK_PINS = {"uv": UV_VERSION, "pip": "26.2.1", "build": "1.6.1", "setuptools": "84.0.0",
+             "packaging": "26.3", "pyproject-hooks": "1.3.3", "colorama": "0.4.6"}
+WIN_LOCK_TOOLS = ["pip", "build", "setuptools", "packaging", "pyproject-hooks", "colorama"]
+WHEEL_PIN = "wheel==0.48.0"
+WIN_TOOLS = [f"{n}=={LOCK_PINS[n]}" for n in WIN_LOCK_TOOLS] + [WHEEL_PIN]
 WIN_TESTS = ["tests/test_cli_help.py", "tests/test_console_encoding.py"]
 INPUTS = ["pyproject.toml", "requirements.lock.txt", "requirements-ci.lock.txt",
           "scripts/smoke_installed.py", *WIN_TESTS]
 SEED = "424242"
 MAX_XML = 64 << 20
-LIMITS = {"install": 1200, "lock_install": 1200, "tests": 1500, "default": 600}
+LIMITS = {"wheel_install": 1200, "lock_install": 1200, "tests": 1500, "default": 600}
 DROP_ENV = {"GITHUB_TOKEN", "GH_TOKEN", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "PIP_REQUIRE_VIRTUALENV"}
 WIN = os.name == "nt"
 BIN = "Scripts" if WIN else "bin"
@@ -57,9 +64,30 @@ EXE = ".exe" if WIN else ""
 DEADLINE = time.monotonic() + 48 * 60
 LOG_TAIL = 200_000
 CLEANUP_LIMIT = 90  # seconds per condition; DEADLINE + 3 min is the hard end of all cleanup
-# The latest exact-base normal CI run (base-linux-test-log.txt, base-windows-test-log.txt).
-BASE_LINUX = {"items": 7408, "passed": 7387, "skipped": 21}
+# Seconds a first measured condition is assumed to need (observed Linux 170-260, Windows 60-120).
+FIRST_NEED = {"linux": 330, "windows": 150}
+# The exact-base normal CI run 40010743546 (Tests py3.14: "4 workers [7739 items]",
+# "7718 passed, 21 skipped"; Windows smoke: "90 passed"). Its coverage leg runs
+# pytest -n auto --outcomes ... --cov=dokimi --cov-branch --cov-report=term --cov-report=xml.
+BASE_LINUX = {"items": 7739, "passed": 7718, "skipped": 21}
 BASE_WIN_TESTS = 90
+# Pre-registered timing/race branches (reviewer finding P1, source read at BASE): the covered
+# state of these lines depends on scheduling, not on installer or distribution. Keys are
+# coverage.xml filenames (relative to the package dir); "blob" is the Git blob id of the file
+# at BASE, and the class applies only while the archive's blob equals it. Only *covered*
+# differences on these lines are classified; executable-line differences and every other
+# covered difference stay fatal.
+RACE_BRANCHES = {
+    "process.py": {
+        "path": "dokimi/dokimi/process.py", "blob": "c1d43706103ab06088d01296e5cb727cb01bb34d",
+        "lines": {565: "except OSError: /proc entry exited during the scan",
+                  566: "continue after that exit",
+                  570: "return False when the scan finds no live group member"}},
+    "harnesses/egress_proxy.py": {
+        "path": "dokimi/dokimi/harnesses/egress_proxy.py",
+        "blob": "145dfd931c1b490b8c1e1878b833f8c21310077a",
+        "lines": {233: "except (socket.timeout, OSError): accept() timed out or the socket closed",
+                  234: "continue after that"}}}
 # Tests that skip without a git work tree. Whole module (None) or named tests; none may skip.
 GIT_TESTS = [("test_growth_ratchet", None), ("test_repo_eval_task_selection", None),
              ("test_stack_health", None),
@@ -315,28 +343,43 @@ def fresh_source(src: dict, dest: Path, epoch: str) -> tuple[Path, dict[str, str
     return dest / "dokimi", index
 
 
-def uv_requirement(lock: Path, out: Path) -> int:
-    """Write the uv block (pin and every hash) of the CI lock; fail closed if it is not uv==UV_VERSION."""
-    lines, take = [], False
+def lock_blocks(lock: Path, names: list[str]) -> dict[str, list[str]]:
+    """The requirement block (pin line and every hash line) of each name in a lock file;
+    fail closed unless each is pinned to LOCK_PINS[name] and carries sha256 hashes."""
+    out: dict[str, list[str]] = {}
+    cur: list[str] | None = None
     for line in lock.read_text(encoding="utf-8").splitlines():
-        if line.startswith("uv=="):
-            take = True
-        elif take and not line.startswith("    --hash="):
-            break
-        if take:
-            lines.append(line)
-    hashes = [x for x in lines if "--hash=sha256:" in x]
-    if not lines or lines[0].split()[0] != f"uv=={UV_VERSION}" or not hashes:
-        raise StudyError(f"lock does not hold uv=={UV_VERSION} with hashes")
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return len(hashes)
+        head = line.split("==", 1)[0] if "==" in line and not line.startswith(" ") else None
+        if head is not None:
+            cur = out.setdefault(head, []) if head in names else None
+        elif cur is not None and not line.startswith("    --hash="):
+            cur = None
+        if cur is not None:
+            cur.append(line)
+    for name in names:
+        block = out.get(name) or []
+        if not block or block[0].split()[0] != f"{name}=={LOCK_PINS[name]}" \
+                or not any("--hash=sha256:" in x for x in block):
+            raise StudyError(f"lock does not hold {name}=={LOCK_PINS[name]} with hashes")
+    return out
+
+
+def write_lock_requirement(lock: Path, names: list[str], out: Path) -> dict:
+    """Write the blocks of `names` as one requirements file; return their pins and sha256."""
+    blocks = lock_blocks(lock, names)
+    text = "\n".join(x for n in names for x in blocks[n]) + "\n"
+    out.write_text(text, encoding="utf-8")
+    return {"names": names, "pins": {n: LOCK_PINS[n] for n in names},
+            "hashes": sum("--hash=sha256:" in x for n in names for x in blocks[n]),
+            "block_sha256": hashlib.sha256(text.encode()).hexdigest()}
 
 
 def provision_uv(lab: Path, src: dict, out: Path) -> dict:
     """uv in its own env from the hash-checked lock block. Its seconds count against uv."""
     t0 = time.perf_counter()
     req, env_dir, log = lab / "uv-only.txt", lab / "uv-tools", out / "logs" / "uv_provision.log"
-    n = uv_requirement(Path(src["dir"]) / "dokimi" / "requirements-ci.lock.txt", req)
+    block = write_lock_requirement(Path(src["dir"]) / "dokimi" / "requirements-ci.lock.txt", ["uv"], req)
+    n = block["hashes"]
     run([sys.executable, "-m", "venv", str(env_dir)], log, cwd=lab, env=base_env(), limit=300)
     py = str(env_dir / BIN / f"python{EXE}")
     run([py, "-m", "pip", "install", "--require-hashes", "--no-cache-dir", "-r", str(req)],
@@ -346,6 +389,8 @@ def provision_uv(lab: Path, src: dict, out: Path) -> dict:
     if not version.startswith(f"uv {UV_VERSION}"):
         raise StudyError(f"uv --version is {version!r}")
     return {"exe": str(exe), "version": version, "hashes_in_requirement": n,
+            "lock_block_sha256": block["block_sha256"],
+            "ci_lock_sha256": src["ci_lock_sha256"],
             "tools_env_pip": capture([py, "-m", "pip", "--version"], lab).strip(),
             "exe_sha256": sha256(exe), "provision_seconds": round(time.perf_counter() - t0, 3)}
 
@@ -399,7 +444,8 @@ def canonical(path: Path) -> dict:
 class Cond:
     """One condition: fresh source copy, fresh venv, one installer (and one xdist mode on Linux)."""
 
-    def __init__(self, cid: str, kind: str, installer: str, dist: str, ctx: dict):
+    def __init__(self, cid: str, kind: str, installer: str, dist: str, ctx: dict,
+                 block: int = 0, seq: int = 0):
         self.id, self.kind, self.installer, self.dist, self.ctx = cid, kind, installer, dist, ctx
         self.out: Path = ctx["out"]
         self.work: Path = ctx["lab"] / "runs" / cid
@@ -407,7 +453,9 @@ class Cond:
         self.cache = str(ctx["lab"] / "cache" / installer)
         self.env = base_env({"VIRTUAL_ENV": str(self.venv), "SOURCE_DATE_EPOCH": ctx["src"]["epoch"],
                              "PATH": str(self.venv / BIN) + os.pathsep + os.environ.get("PATH", "")})
+        # block/seq: 1-based measured block and 0-based position in the VM's executed sequence
         self.rec: dict = {"id": cid, "kind": kind, "installer": installer, "dist": dist,
+                          "block": block, "seq": seq, "repeat_id": f"{ctx.get('repeat', 0)}:{cid}",
                           "status": "running", "stages": {}, "commands": {}}
 
     def step(self, name: str, argv: list[str], cwd: Path, env: dict[str, str] | None = None) -> str:
@@ -537,17 +585,52 @@ def same(runs: list[dict], get) -> bool:
     return bool(vals) and len(set(vals)) == 1 and vals[0] != "null"
 
 
-def coverage_diff(runs: list[dict], limit: int = 20) -> list[str]:
-    """Files whose executable or covered line sets differ from the first run (bounded list)."""
-    ref, diffs = runs[0]["result"]["coverage"], []
-    for r in runs[1:]:
-        cov = r["result"]["coverage"]
-        for f in sorted(set(ref) | set(cov)):
-            for k in ("executable", "covered"):
-                a, b = set(ref.get(f, {}).get(k, [])), set(cov.get(f, {}).get(k, []))
-                if a != b:
-                    diffs.append(f"{r['id']} {f} {k}: only-ref {sorted(a - b)[:5]} only-run {sorted(b - a)[:5]}")
-    return diffs[:limit]
+def cond_key(r: dict) -> str:
+    return f"{r['installer']}-{r['dist']}"
+
+
+def coverage_report(runs: list[dict], blobs: dict[str, str], limit: int = 200) -> dict:
+    """All pairwise coverage comparisons of the measured runs, strict and classified.
+
+    Strict: any executable or covered line-set difference between any two runs. Classified:
+    a covered difference on a RACE_BRANCHES line whose file blob equals the pinned BASE blob is
+    "preregistered"; every other covered difference is "unregistered". An executable-line
+    difference is always fatal, whatever the line. Per differing line the run ids that do and
+    do not cover it are listed (bounded), with the pairwise counts for same-condition replicates."""
+    cov = {r["id"]: r["result"]["coverage"] for r in runs}
+    ids = [r["id"] for r in runs]
+    cond = {r["id"]: cond_key(r) for r in runs}
+    files = sorted({f for c in cov.values() for f in c})
+    lines: list[dict] = []
+    for f in files:
+        for kind in ("executable", "covered"):
+            sets = {i: set(cov[i].get(f, {}).get(kind, [])) for i in ids}
+            for n in sorted(set().union(*sets.values()) - set.intersection(*sets.values())):
+                has = [i for i in ids if n in sets[i]]
+                rb = RACE_BRANCHES.get(f)
+                known = bool(rb) and n in rb["lines"] and blobs.get(rb["path"]) == rb["blob"]
+                cls = "fatal-executable" if kind == "executable" else (
+                    "preregistered" if known else "unregistered")
+                lines.append({"file": f, "line": n, "kind": kind, "class": cls, "covered_by": has,
+                              "not_covered_by": [i for i in ids if i not in has],
+                              "covered_by_conditions": dict(Counter(cond[i] for i in has))})
+    pairs = []
+    for x, a in enumerate(ids):
+        for b in ids[x + 1:]:
+            mine = [d for d in lines if (a in d["covered_by"]) != (b in d["covered_by"])]
+            pairs.append({"a": a, "b": b, "same_condition": cond[a] == cond[b],
+                          "strict_differing_lines": len(mine),
+                          "classes": dict(Counter(d["class"] for d in mine))})
+    by_class = Counter(d["class"] for d in lines)
+    return {"runs": ids, "strict_identical": not lines, "differing_lines_total": len(lines),
+            "by_class": dict(by_class), "pairs": pairs,
+            "same_condition_pairs_differing": sum(1 for p in pairs
+                                                  if p["same_condition"] and p["strict_differing_lines"]),
+            "lines": lines[:limit], "lines_truncated": len(lines) > limit,
+            "executable_equal": by_class["fatal-executable"] == 0,
+            "no_unregistered_covered_differences": by_class["unregistered"] == 0,
+            "preregistered_rationale": {f: rb["lines"] for f, rb in RACE_BRANCHES.items()},
+            "preregistered_blobs": {rb["path"]: rb["blob"] for rb in RACE_BRANCHES.values()}}
 
 
 def git_tests_skipped(junit: dict) -> list[str]:
@@ -562,9 +645,39 @@ def git_tests_skipped(junit: dict) -> list[str]:
     return bad
 
 
-def validate(runs: list[dict], family: str) -> tuple[dict, list[str]]:
+def pip_equal(runs: list[dict]) -> bool:
+    """Every condition's venv (and Windows bootstrapped) pip is the same version."""
+    return same([r for r in runs if r.get("pip")], lambda r: r.get("pip"))
+
+
+def factors(family: str) -> list[str]:
+    """The measured conditions of a VM: installer x distribution (Linux), installer (Windows)."""
+    return ["pip-load", "uv-load", "pip-worksteal", "uv-worksteal"] if family == "linux" \
+        else ["pip-load", "uv-load"]
+
+
+def order_balanced(meas: list[dict], expected: list[str]) -> bool:
+    """Two blocks, each holding every expected condition exactly once, block 2 the reverse of
+    block 1, run back to back; every condition's mean sequence position is then equal.
+    `meas` is every measured condition that was started, in any status."""
+    ordered = sorted(meas, key=lambda r: r["seq"])
+    seqs = [r["seq"] for r in ordered]
+    if len(ordered) != 2 * len(expected) or seqs != list(range(seqs[0], seqs[0] + len(seqs))):
+        return False
+    blocks = {b: [cond_key(r) for r in ordered if r["block"] == b] for b in (1, 2)}
+    if any(sorted(v) != sorted(expected) for v in blocks.values()) or blocks[2] != blocks[1][::-1]:
+        return False
+    return len({sum(r["seq"] for r in ordered if cond_key(r) == c) for c in expected}) == 1
+
+
+def validate(runs: list[dict], family: str, blobs: dict[str, str]) -> tuple[dict, dict | None, list[str]]:
+    """Every guard, by name. Which claim a guard gates is decided in claim_status()."""
     ok = [r for r in runs if r["status"] == "ok"]
+    started = [r for r in runs if r["kind"] == "measured"]
     g = {"all_runs_ok": bool(runs) and len(ok) == len(runs),
+         "blocks_complete": len([r for r in started if r["status"] == "ok"]) == 2 * len(factors(family)),
+         "order_balanced": bool(started) and order_balanced(started, factors(family)),
+         "pip_versions_equal": pip_equal(runs),
          "cleanup_ok": bool(runs) and all(r.get("cleanup_ok") is True for r in runs),
          "tracked_tree_unchanged_by_tests": all(
              r["tree_after_tests"]["unchanged"] for r in ok if "result" in r),
@@ -572,6 +685,7 @@ def validate(runs: list[dict], family: str) -> tuple[dict, list[str]]:
          "junit_ids_and_results": same([r for r in ok if "result" in r],
                                        lambda r: r["result"]["junit"])}
     notes: list[str] = []
+    cov = None
     if family == "windows":
         g.update(wheel=same(ok, lambda r: r.get("wheel")),
                  manifest_initial=same(ok, lambda r: r.get("manifests", {}).get("initial")),
@@ -582,9 +696,8 @@ def validate(runs: list[dict], family: str) -> tuple[dict, list[str]]:
     else:
         meas = [r for r in ok if r["kind"] == "measured"]
         counts = [Counter(r["result"]["junit"].values()) for r in meas]
-        g.update(four_measured=len(meas) == 4,
-                 workers_and_items=same(meas, lambda r: [r.get("workers"), r.get("items")]),
-                 # tied to the latest exact-base normal CI: 7408 items = 7387 passed + 21 skipped
+        g.update(workers_and_items=same(meas, lambda r: [r.get("workers"), r.get("items")]),
+                 # tied to the exact-base normal CI: 7739 items = 7718 passed + 21 skipped
                  items_equal_base_ci=bool(meas) and all(
                      r["items"] == len(r["result"]["junit"]) == BASE_LINUX["items"] for r in meas),
                  pass_skip_counts_equal_base_ci=bool(meas) and all(
@@ -596,11 +709,12 @@ def validate(runs: list[dict], family: str) -> tuple[dict, list[str]]:
                  journeys_report=same(meas, lambda r: r["result"]["journeys"]),
                  outcomes_verdict_pass=bool(meas) and all(
                      r["result"]["outcomes"].get("verdict") == "pass" for r in meas))
-        notes = coverage_diff(meas) if meas else []
-        g["coverage_line_sets"] = bool(meas) and not notes
+        cov = coverage_report(meas, blobs) if meas else None
+        g["coverage_executable_lines_equal"] = bool(cov) and cov["executable_equal"]
+        g["coverage_no_unregistered_differences"] = bool(cov) and cov["no_unregistered_covered_differences"]
         notes += [f"{r['id']} git test not passed: {x}" for r in meas
                   for x in git_tests_skipped(r["result"]["junit"])][:20]
-    return g, notes
+    return g, cov, notes
 
 
 def metadata(args: argparse.Namespace) -> dict:
@@ -614,46 +728,311 @@ def metadata(args: argparse.Namespace) -> dict:
     return out
 
 
-def summarize(runs: list[dict], tools: dict, family: str) -> dict:
+def summarize(runs: list[dict], tools: dict) -> dict:
     def row(r: dict) -> dict:
         s = r["stages"]
         return {"id": r["id"], "installer": r["installer"], "dist": r["dist"], "status": r["status"],
                 "stages": s, "install_seconds": round(sum(s.get(k, 0) for k in INSTALL_STAGES), 3),
                 "job_seconds": round(sum(s.get(k, 0) for k in STAGE_SUM), 3)}
 
-    meas = [row(r) for r in runs if r["kind"] == "measured" and r["status"] == "ok"]
-    out: dict = {"measured": meas, "primers_excluded": [row(r) for r in runs if r["kind"] == "primer"],
-                 "uv_provision_seconds": tools["provision_seconds"]}
+    meas = [dict(row(r), block=r["block"], seq=r["seq"], repeat_id=r["repeat_id"])
+            for r in sorted(runs, key=lambda r: r["seq"]) if r["kind"] == "measured" and r["status"] == "ok"]
+    # Raw per-run times and per-condition replicates: measurements, not claims.
+    reps: dict[str, dict] = {}
+    for m in meas:
+        c = reps.setdefault(f"{m['installer']}-{m['dist']}", {"install_seconds": [], "tests_seconds": []})
+        c["install_seconds"].append(m["install_seconds"])
+        c["tests_seconds"].append(m["stages"].get("tests"))
+    for c in reps.values():
+        c["install_range"] = round(max(c["install_seconds"]) - min(c["install_seconds"]), 3)
+        tests = [t for t in c["tests_seconds"] if t is not None]
+        c["tests_range"] = round(max(tests) - min(tests), 3) if tests else None
+    return {"measured": meas, "primers_excluded": [row(r) for r in runs if r["kind"] == "primer"],
+            "uv_provision_seconds": tools["provision_seconds"], "replicates_by_condition": reps}
 
-    def avg(inst: str, dist: str | None, key: str) -> float | None:
-        v = [m[key] for m in meas if m["installer"] == inst and dist in (None, m["dist"])]
-        return round(sum(v) / len(v), 3) if v else None
 
-    for key in ("install_seconds", "job_seconds"):
-        pip_s, uv_s = avg("pip", None, key), avg("uv", None, key)
-        if pip_s is not None and uv_s is not None:
-            out[f"{key}_pip_mean"], out[f"{key}_uv_mean"] = pip_s, uv_s
-            out[f"{key}_saved_by_uv_after_provisioning"] = round(
-                pip_s - (uv_s + tools["provision_seconds"]), 3)
-    if family == "linux":
-        for inst in ("pip", "uv"):
-            tl = [m["stages"].get("tests") for m in meas if m["installer"] == inst and m["dist"] == "load"]
-            tw = [m["stages"].get("tests") for m in meas if m["installer"] == inst and m["dist"] == "worksteal"]
-            if tl and tw:
-                out[f"tests_seconds_{inst}"] = {"load": tl[0], "worksteal": tw[0],
-                                                "worksteal_saved": round(tl[0] - tw[0], 3)}
+def mean(v: list[float]) -> float:
+    return round(sum(v) / len(v), 3)
+
+
+def installer_value(raw: dict, provision: float) -> dict | None:
+    """pip minus (uv + provisioning charged once per job), on the job's install seconds."""
+    pip = [m["install_seconds"] for m in raw["measured"] if m["installer"] == "pip"]
+    uv = [m["install_seconds"] for m in raw["measured"] if m["installer"] == "uv"]
+    if not pip or not uv:
+        return None
+    saved = round(mean(pip) - (mean(uv) + provision), 3)
+    spread = max(c["install_range"] for c in raw["replicates_by_condition"].values())
+    by_block = {}
+    for b in (1, 2):
+        p = [m["install_seconds"] for m in raw["measured"] if m["installer"] == "pip" and m["block"] == b]
+        u = [m["install_seconds"] for m in raw["measured"] if m["installer"] == "uv" and m["block"] == b]
+        if p and u:
+            by_block[str(b)] = round(mean(p) - (mean(u) + provision), 3)
+    return {"pip_mean_install_seconds": mean(pip), "uv_mean_install_seconds": mean(uv),
+            "uv_provision_seconds_charged_once": provision, "saved_seconds_after_provisioning": saved,
+            "saved_by_block": by_block, "same_condition_range_max_seconds": spread,
+            "exceeds_same_condition_range": abs(saved) > spread}
+
+
+def distribution_value(raw: dict) -> dict:
+    """Per installer: load minus worksteal test seconds, with the same-condition ranges."""
+    def t(inst: str, dist: str, block: int | None = None) -> list[float]:
+        return [m["stages"]["tests"] for m in raw["measured"] if m["installer"] == inst
+                and m["dist"] == dist and block in (None, m["block"]) and "tests" in m["stages"]]
+
+    out = {}
+    for inst in ("pip", "uv"):
+        if t(inst, "load") and t(inst, "worksteal"):
+            blocks = {str(b): round(mean(t(inst, "load", b)) - mean(t(inst, "worksteal", b)), 3)
+                      for b in (1, 2) if t(inst, "load", b) and t(inst, "worksteal", b)}
+            saved = round(mean(t(inst, "load")) - mean(t(inst, "worksteal")), 3)
+            spread = max(raw["replicates_by_condition"][f"{inst}-{d}"]["tests_range"] or 0
+                         for d in ("load", "worksteal"))
+            out[inst] = {"load_mean": mean(t(inst, "load")), "worksteal_mean": mean(t(inst, "worksteal")),
+                         "worksteal_saved_seconds": saved, "saved_by_block": blocks,
+                         "sign_consistent_across_blocks": len({v > 0 for v in blocks.values()}) == 1,
+                         "same_condition_range_max_seconds": spread,
+                         "exceeds_same_condition_range": abs(saved) > spread}
     return out
+
+
+# Guards each claim needs. The installer comparison needs equal installed sets, equal pip,
+# balanced order and successful runs; it does not need the test-run guards. The test-run
+# equivalence and the distribution comparison do.
+INSTALL_GUARDS = ["all_runs_ok", "blocks_complete", "order_balanced", "pip_versions_equal",
+                  "cleanup_ok", "source_unchanged", "manifest_post_lock"]
+WINDOWS_INSTALL_GUARDS = ["wheel", "manifest_initial", "manifest_pre_lock"]
+WINDOWS_TEST_GUARDS = ["tracked_tree_unchanged_by_tests", "junit_ids_and_results", "ninety_tests_all_passed"]
+LINUX_TEST_GUARDS = [
+    "tracked_tree_unchanged_by_tests", "junit_ids_and_results", "workers_and_items",
+    "items_equal_base_ci", "pass_skip_counts_equal_base_ci", "git_dependent_tests_not_skipped",
+    "outcomes_report", "journeys_report", "outcomes_verdict_pass",
+    "coverage_executable_lines_equal", "coverage_no_unregistered_differences"]
+VM_SCOPE = "single VM, one repeat of the five; no installer or distribution decision from one VM"
+
+
+def claim_status(g: dict, raw: dict, provision: float, family: str) -> dict:
+    """Per claim: its guards, whether all passed, and the number only when they did. A number
+    from a claim with a failed guard is kept under `unvalidated_diagnostic`, never as `value`."""
+    install = INSTALL_GUARDS + (WINDOWS_INSTALL_GUARDS if family == "windows" else [])
+    tests = WINDOWS_TEST_GUARDS if family == "windows" else LINUX_TEST_GUARDS
+    claims = {"installer_install_seconds": (install, installer_value(raw, provision)),
+              "test_run_equivalence": (tests, None)}
+    if family == "linux":
+        claims["distribution_test_seconds"] = (install + tests, distribution_value(raw))
+    out = {}
+    for name, (need, value) in claims.items():
+        failed = [k for k in need if g.get(k) is not True]
+        ok = not failed
+        out[name] = {"status": "vm_validated" if ok else "unvalidated", "scope": VM_SCOPE,
+                     "guards": {k: g.get(k) is True for k in need}, "failed_guards": failed,
+                     "value": value if ok else None,
+                     "unvalidated_diagnostic": None if ok else value}
+    return out
+
+
+# Williams square over the four Linux conditions (indices into factors("linux")): every ordered
+# pair of conditions is adjacent once across rows 1-4. Repeat r uses row (r-1) % 4, so repeat 5
+# repeats row 1. Block 2 of every VM is block 1 reversed.
+WILLIAMS = [(0, 1, 3, 2), (1, 2, 0, 3), (2, 3, 1, 0), (3, 0, 2, 1)]
+
+
+def block_plan(family: str, repeat: int) -> list[list[tuple[str, str]]]:
+    """[block 1, block 2] as (installer, dist) lists; block 2 is block 1 reversed."""
+    names = factors(family)
+    if family == "linux":
+        first = [names[i] for i in WILLIAMS[(repeat - 1) % 4]]
+    else:  # two conditions: pip first on odd repeats, uv first on even ones
+        first = names if repeat % 2 else names[::-1]
+    pairs = [tuple(n.split("-", 1)) for n in first]
+    return [pairs, pairs[::-1]]
+
+
+def check(cond: bool, msg: str) -> None:
+    if not cond:
+        raise StudyError(f"self-check: {msg}")
+
+
+def _syn_run(cid: str, inst: str, dist: str, block: int, seq: int, cov: dict | None = None) -> dict:
+    return {"id": cid, "installer": inst, "dist": dist, "block": block, "seq": seq,
+            "result": {"coverage": cov or {}}}
+
+
+def _syn_cov(path: str, executable: list[int], covered: list[int]) -> dict:
+    return {path: {"executable": executable, "covered": covered}}
+
+
+def _syn_plan_runs(family: str, repeat: int) -> list[dict]:
+    runs, seq = [], 0
+    for b, order in enumerate(block_plan(family, repeat), 1):
+        for inst, dist in order:
+            runs.append(_syn_run(f"m-{inst}-{dist}-b{b}", inst, dist, b, seq))
+            seq += 1
+    return runs
+
+
+def _self_coverage() -> None:
+    proc, blob = RACE_BRANCHES["process.py"], RACE_BRANCHES["process.py"]["blob"]
+    blobs = {proc["path"]: blob}
+    exe = list(range(560, 575))
+    base = _syn_cov("process.py", exe, [n for n in exe if n not in (565, 566, 570)])
+    racy = _syn_cov("process.py", exe, exe)
+
+    def rep(a: dict, b: dict, known: dict[str, str]) -> dict:
+        return coverage_report([_syn_run("a", "pip", "load", 1, 0, a), _syn_run("b", "uv", "load", 1, 1, b)], known)
+
+    same_cov = rep(base, base, blobs)
+    check(same_cov["strict_identical"] and same_cov["no_unregistered_covered_differences"], "identical rejected")
+    reg = rep(base, racy, blobs)  # 565, 566 and 570 differ: all pre-registered
+    check(not reg["strict_identical"] and reg["by_class"] == {"preregistered": 3}
+          and reg["no_unregistered_covered_differences"] and reg["executable_equal"],
+          "pre-registered race lines not classified (strict result must stay raw)")
+    check(not rep(base, racy, {})["no_unregistered_covered_differences"], "blob-unbound class accepted")
+    check(not rep(base, racy, {proc["path"]: "0" * 40})["no_unregistered_covered_differences"],
+          "changed source blob still accepted")
+    other = _syn_cov("process.py", exe, [n for n in exe if n not in (565, 566, 570, 567)])
+    check(not rep(other, racy, blobs)["no_unregistered_covered_differences"], "unregistered line 567 accepted")
+    unknown = rep(_syn_cov("other.py", [1, 2], [1]), _syn_cov("other.py", [1, 2], [1, 2]), blobs)
+    check(unknown["by_class"] == {"unregistered": 1} and not unknown["no_unregistered_covered_differences"],
+          "unknown file difference accepted")
+    changed = rep(_syn_cov("process.py", exe, exe), _syn_cov("process.py", exe[:-1], exe[:-1]), blobs)
+    check(not changed["executable_equal"], "changed executable line accepted")
+    reg_exec = rep(_syn_cov("process.py", exe, exe), _syn_cov("process.py", [n for n in exe if n != 565],
+                                                              [n for n in exe if n != 565]), blobs)
+    check(not reg_exec["executable_equal"], "executable difference on a registered line accepted")
+    # pairwise, not first-reference: one odd run among four differs from three, others agree
+    four = [_syn_run(f"r{i}", "pip", "load", 1, i, racy if i == 0 else base) for i in range(4)]
+    pairs = coverage_report(four, blobs)["pairs"]
+    check(sum(1 for p in pairs if p["strict_differing_lines"]) == 3 and len(pairs) == 6, "pairwise matrix wrong")
+
+
+def _self_order() -> None:
+    for fam in ("linux", "windows"):
+        for rep in range(1, 6):
+            runs = _syn_plan_runs(fam, rep)
+            check(order_balanced(runs, factors(fam)), f"{fam} repeat {rep} plan not balanced")
+    adj = {(a, b) for row in WILLIAMS for a, b in zip(row, row[1:], strict=False)}
+    check(len(adj) == 12, "Williams rows do not cover every ordered pair once")
+    runs = _syn_plan_runs("linux", 1)
+    check(not order_balanced(runs[:-1], factors("linux")), "missing run accepted")
+    b2 = [r for r in runs if r["block"] == 2]  # block 2 rotated by one: every condition, not reversed
+    swapped = [dict(r, installer=b2[(i + 1) % 4]["installer"], dist=b2[(i + 1) % 4]["dist"])
+               if r["block"] == 2 else r for r, i in zip(runs, range(8), strict=True)]
+    check(not order_balanced(swapped, factors("linux")), "block 2 not the reverse of block 1 accepted")
+    gap = [dict(r, seq=r["seq"] + (5 if r["seq"] > 3 else 0)) for r in runs]
+    check(not order_balanced(gap, factors("linux")), "non-consecutive sequence accepted")
+
+
+def _self_pip_and_lock(tmp: Path) -> None:
+    a, b = {"id": "a", "pip": {"venv": "pip 26.2.1"}}, {"id": "b", "pip": {"venv": "pip 26.2.1"}}
+    check(pip_equal([a, b]), "equal pip rejected")
+    check(not pip_equal([a, dict(b, pip={"venv": "pip 25.0"})]), "pip mismatch accepted")
+    check(not pip_equal([a, dict(b, pip={"venv": "pip 26.2.1", "after_bootstrap": "pip 25"})]),
+          "bootstrap pip mismatch accepted")
+    lock = tmp / "ci.lock"
+    lock.write_text("# header\nuv==0.13.4 \\\n    --hash=sha256:aa \\\n    --hash=sha256:bb\n"
+                    "    # via x\nother==1 \\\n    --hash=sha256:cc\n", encoding="utf-8")
+    check(lock_blocks(lock, ["uv"])["uv"][0].startswith("uv==0.13.4"), "uv block not read")
+    for text, why in (("uv==0.13.5 \\\n    --hash=sha256:aa\n", "wrong pin"), ("uv==0.13.4\n", "no hashes")):
+        lock.write_text(text, encoding="utf-8")
+        try:
+            lock_blocks(lock, ["uv"])
+        except StudyError:
+            continue
+        raise StudyError(f"self-check: lock accepted with {why}")
+
+
+def _self_claims() -> None:
+    meas = [{"installer": i, "dist": d, "block": b, "install_seconds": s, "stages": {"tests": t}}
+            for i, d, b, s, t in [("pip", "load", 1, 50, 120), ("uv", "load", 1, 14, 118), ("pip", "worksteal", 1, 49, 112),
+                                  ("uv", "worksteal", 1, 14, 111), ("uv", "worksteal", 2, 15, 113),
+                                  ("pip", "worksteal", 2, 51, 114), ("uv", "load", 2, 14, 121), ("pip", "load", 2, 50, 119)]]
+    reps = {f"{i}-{d}": {"install_range": 2, "tests_range": 3} for i in ("pip", "uv") for d in ("load", "worksteal")}
+    raw = {"measured": meas, "replicates_by_condition": reps}
+    guards = {k: True for k in INSTALL_GUARDS + LINUX_TEST_GUARDS}
+    good = claim_status(guards, raw, 5.0, "linux")
+    check(all(c["status"] == "vm_validated" and c["value"] is not None
+              for n, c in good.items() if n != "test_run_equivalence"), "validated claims lack a value")
+    bad = claim_status({**guards, "coverage_no_unregistered_differences": False}, raw, 5.0, "linux")
+    check(bad["installer_install_seconds"]["status"] == "vm_validated", "coverage guard gated the installer claim")
+    for n in ("distribution_test_seconds", "test_run_equivalence"):
+        check(bad[n]["status"] == "unvalidated" and bad[n]["value"] is None, f"{n} shows a number after a failed guard")
+    check(bad["distribution_test_seconds"]["unvalidated_diagnostic"] is not None, "diagnostic dropped")
+    worse = claim_status({**guards, "pip_versions_equal": False}, raw, 5.0, "linux")
+    check(all(c["status"] == "unvalidated" for n, c in worse.items() if n != "test_run_equivalence")
+          and worse["installer_install_seconds"]["value"] is None, "pip mismatch left a claim validated")
+    # pip mean 50, uv mean 14.25, provisioning 5 charged once: 50 - (14.25 + 5)
+    check(good["installer_install_seconds"]["value"]["saved_seconds_after_provisioning"] == 30.75,
+          "installer arithmetic")
+
+
+def _self_tree_kill(tmp: Path) -> None:
+    beat = tmp / "beat.txt"
+    child = "import time,sys\nwhile True:\n open(sys.argv[1],'a').write('x')\n time.sleep(0.2)\n"
+    parent = "import subprocess,sys,time\nsubprocess.Popen([sys.executable,'-c',sys.argv[2],sys.argv[1]])\ntime.sleep(60)\n"
+    try:
+        spawn([sys.executable, "-c", parent, str(beat), child], cwd=tmp, env=base_env(), timeout=3,
+              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        pass
+    else:
+        raise StudyError("self-check: the timeout did not fire")
+    size = beat.stat().st_size if beat.exists() else 0
+    check(size > 0, "the grandchild never ran")
+    time.sleep(1.5)
+    check(beat.stat().st_size == size, "the grandchild survived the process-tree kill")
+
+
+def self_check() -> int:
+    """Synthetic checks of the study's own guards; no repository code is used."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        steps = [("coverage classification", _self_coverage), ("order balance", _self_order),
+                 ("pip and lock", lambda: _self_pip_and_lock(tmp)), ("claim gating", _self_claims),
+                 ("process-tree kill", lambda: _self_tree_kill(tmp))]
+        for name, fn in steps:
+            try:
+                fn()
+            except StudyError as exc:
+                print(f"self-check FAILED [{name}]: {exc}", flush=True)
+                return 1
+            print(f"self-check ok [{name}]", flush=True)
+    return 0
+
+
+def write_step_summary(summary: dict) -> None:
+    """Claim status table into the job summary when running on GitHub Actions."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    rows = [f"### {summary['metadata']['family']} repeat {summary['metadata']['repeat']}: {summary['status']}",
+            "", "| claim | status | failed guards |", "|---|---|---|"]
+    for name, c in summary.get("claims", {}).items():
+        rows.append(f"| {name} | {c['status']} | {', '.join(c['failed_guards']) or '-'} |")
+    cov = summary.get("coverage")
+    if cov:
+        rows += ["", f"coverage: strict identical {cov['strict_identical']}, by class {cov['by_class']}"]
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write("\n".join(rows) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--family", choices=["windows", "linux"], required=True)
-    ap.add_argument("--repeat", type=int, required=True)
-    ap.add_argument("--python", required=True, help="expected major.minor, e.g. 3.14")
-    ap.add_argument("--repo", type=Path, required=True)
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--lab", type=Path, required=True)
+    ap.add_argument("--self-check", action="store_true", help="run the synthetic guard checks and exit")
+    ap.add_argument("--family", choices=["windows", "linux"])
+    ap.add_argument("--repeat", type=int)
+    ap.add_argument("--python", help="expected major.minor, e.g. 3.14")
+    ap.add_argument("--repo", type=Path)
+    ap.add_argument("--out", type=Path)
+    ap.add_argument("--lab", type=Path)
     args = ap.parse_args(argv)
+    if args.self_check:
+        return self_check()
+    missing = [k for k in ("family", "repeat", "python", "repo", "out", "lab") if getattr(args, k) is None]
+    if missing:
+        ap.error(f"required: {', '.join('--' + k for k in missing)}")
     out, lab, repo = args.out.resolve(), args.lab.resolve(), args.repo.resolve()
     out.mkdir(parents=True, exist_ok=True)
     if lab.exists():
@@ -663,8 +1042,17 @@ def main(argv: list[str] | None = None) -> int:
     summary: dict = {"status": "setup", "limits": [
         "clean-environment step comparison, not the global-Python CI jobs; no queue or end-to-end claim",
         "each installer has its own warmed download cache from an excluded primer",
-        "uv provisioning seconds must be added to the uv side (see *_saved_by_uv_after_provisioning)",
-        "one repeat per VM; no significance claim from one VM",
+        "uv provisioning seconds are charged once per hypothetical CI job against the uv side, "
+        "inside claims.installer_install_seconds only",
+        "one repeat per VM; each claim is vm_validated or unvalidated; no decision from one VM; "
+        "worksteal is not chosen from noise-sized differences (compare with the same-condition range)",
+        "two blocks per VM, block 2 the reverse of block 1, so every condition has an identical "
+        "same-condition replicate and equal mean position; the pytest seed is fixed (CI's is random)",
+        "coverage: executable-line equality is strict; covered-line differences are reported raw "
+        "(strict) and classified, only the pre-registered RACE_BRANCHES lines (bound to BASE blob ids) "
+        "are tolerated, everything else is fatal for test_run_equivalence and distribution claims",
+        "pip and uv installs are compared by package names and versions plus equal venv pip; built "
+        "wheels (scikit-network sdist on Linux) are not compared byte for byte",
         "Windows wheel_install is a pinned, loose resolve (constraints from primer-pip), controlled "
         "for pip-vs-uv equality; it excludes the fresh-resolve cost CI pays and is not the CI canary cost",
         "scope is the Windows smoke path and the Linux Tests (py3.14, coverage) job only; the other "
@@ -686,12 +1074,23 @@ def main(argv: list[str] | None = None) -> int:
         write_json(out / "source-manifest.json", {"sha256": src["files"], "git_blob": src["blobs"]})
         tools = provision_uv(lab, src, out)
         summary["uv"] = tools
-        ctx = {"out": out, "lab": lab, "src": src, "uv": tools, "family": args.family}
+        ctx = {"out": out, "lab": lab, "src": src, "uv": tools, "family": args.family,
+               "repeat": args.repeat}
         if args.family == "windows":
-            (lab / "build-constraints.txt").write_text("setuptools==84.2.1\nwheel==0.48.0\n")
+            (lab / "build-constraints.txt").write_text(
+                f"setuptools=={LOCK_PINS['setuptools']}\n{WHEEL_PIN}\n")
             t0 = time.perf_counter()
-            run([sys.executable, "-m", "pip", "download", "--dest", str(lab / "wheelhouse"), *WIN_TOOLS],
-                out / "logs" / "wheelhouse.log", cwd=lab, env=base_env(), limit=300)
+            wreq = lab / "win-tools.txt"
+            summary["win_tools_lock"] = write_lock_requirement(
+                Path(src["dir"]) / "dokimi" / "requirements-ci.lock.txt", WIN_LOCK_TOOLS, wreq)
+            wlog = out / "logs" / "wheelhouse.log"
+            # The lock's tools with its hashes; wheel (not in the lock) by exact pin.
+            run([sys.executable, "-m", "pip", "download", "--no-deps", "--require-hashes",
+                 "--dest", str(lab / "wheelhouse"), "-r", str(wreq)],
+                wlog, cwd=lab, env=base_env(), limit=300)
+            run([sys.executable, "-m", "pip", "download", "--no-deps",
+                 "--dest", str(lab / "wheelhouse"), WHEEL_PIN],
+                wlog, cwd=lab, env=base_env(), limit=300)
             ctx["wheelhouse"] = str(lab / "wheelhouse")
             summary["wheelhouse_seconds_excluded"] = round(time.perf_counter() - t0, 3)
     except Exception as exc:  # noqa: BLE001
@@ -699,25 +1098,48 @@ def main(argv: list[str] | None = None) -> int:
         write_json(out / "summary.json", summary)
         print(f"setup FAILED: {exc}", flush=True)
         return 1
-    # nosec B311 - seeded shuffle of the run order, not a security use
-    rng = random.Random(f"{os.environ.get('GITHUB_RUN_ID', '0')}-{args.family}-{args.repeat}-{SEED}")  # nosec B311
-    dists = ["load"] if args.family == "windows" else ["load", "worksteal"]
-    plan = rng.sample([(i, d) for i in ("pip", "uv") for d in dists], len(dists) * 2)
-    summary["plan"] = {"primers": ["pip", "uv"], "measured_order": plan}
+    blocks = block_plan(args.family, args.repeat)
+    summary["plan"] = {"primers": ["pip", "uv"], "blocks": blocks, "design": "Williams row, block 2 reversed"}
     summary["status"] = "running"
     write_json(out / "summary.json", summary)
     runs = [Cond(f"primer-{i}", "primer", i, "load", ctx).execute() for i in ("pip", "uv")]
-    if all(r["status"] == "ok" for r in runs):
-        runs += [Cond(f"measured-{i}-{d}", "measured", i, d, ctx).execute() for i, d in plan]
-    guards, notes = validate(runs, args.family)
+    seq, wall = 0, [FIRST_NEED[args.family]]
+    for b, order in enumerate(blocks, 1):
+        for inst, dist in order:
+            if not all(r["status"] == "ok" for r in runs if r["kind"] == "primer"):
+                break  # a failed primer leaves the caches cold: no measured condition is comparable
+            need = 1.25 * max(wall) + CLEANUP_LIMIT
+            if DEADLINE - time.monotonic() < need:  # a started condition must be able to finish
+                summary["deadline_stop"] = {"before": f"measured-{inst}-{dist}-b{b}", "need_seconds": round(need)}
+                break
+            r = Cond(f"measured-{inst}-{dist}-b{b}", "measured", inst, dist, ctx, block=b, seq=seq).execute()
+            runs.append(r)
+            wall.append(r["wall_seconds"])
+            seq += 1
+        else:
+            continue
+        break
+    blobs = src["blobs"]
+    guards, cov, notes = validate(runs, args.family, blobs)
     guards["source_unchanged"] = tree_manifest(Path(src["dir"])) == src["files"]
-    summary.update(runs={r["id"]: {"status": r["status"], "error": r.get("error")} for r in runs},
-                   summary=summarize(runs, tools, args.family), guards=guards, coverage_differences=notes,
+    raw = summarize(runs, tools)
+    claims = claim_status(guards, raw, tools["provision_seconds"], args.family)
+    summary.update(runs={r["id"]: {"status": r["status"], "error": r.get("error"), "block": r["block"],
+                                   "seq": r["seq"], "repeat_id": r["repeat_id"]} for r in runs},
+                   measures=raw, guards=guards, claims=claims, coverage=cov, notes=notes,
                    job_wall_seconds=round(time.perf_counter() - t_job, 3))
-    summary["status"] = "complete" if all(guards.values()) else "failed"
+    clean = all(guards.values())
+    summary["status"] = "complete" if clean else (
+        "execution-failed" if not guards["all_runs_ok"] or "deadline_stop" in summary else "guard-failed")
     write_json(out / "summary.json", summary)
+    write_step_summary(summary)
     print(f"status: {summary['status']} guards: {guards}", flush=True)
-    return 0 if summary["status"] == "complete" else 1
+    for name, c in claims.items():
+        print(f"claim {name}: {c['status']} failed={c['failed_guards']}", flush=True)
+    if not clean:
+        print("a validity guard failed: the claims above marked unvalidated carry no established "
+              "number; this is not by itself a repository test failure", flush=True)
+    return 0 if clean else (1 if summary["status"] == "execution-failed" else 3)
 
 
 if __name__ == "__main__":
