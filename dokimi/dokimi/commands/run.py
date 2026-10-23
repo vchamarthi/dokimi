@@ -13,7 +13,7 @@ from pathlib import Path
 from dokimi.report.json_report import write_json
 from dokimi.report.markdown_report import write_compare_report, write_run_report
 from dokimi.runner.compare import compare_snapshots
-from dokimi.runner.run import run_benchmark, save_snapshot
+from dokimi.runner.run import _load_spec, run_benchmark, save_snapshot
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -24,10 +24,11 @@ def cmd_run(args: argparse.Namespace) -> None:
     out_md = Path(args.out_md).resolve()
 
     try:
-        result = run_benchmark(root, spec_path)
-    except (RuntimeError, ValueError) as exc:  # a spec that cannot be read, parsed or validated
+        _load_spec(spec_path)  # fail on a spec that cannot be read, parsed or validated, before the run
+    except (RuntimeError, ValueError) as exc:
         print(f"Error: {spec_path}: {exc}", file=sys.stderr)
         sys.exit(2)  # 1 is the verdict code of --strict
+    result = run_benchmark(root, spec_path)
     save_snapshot(result, out_json)
     write_run_report(result, out_md)
     print(json.dumps(result["summary"], indent=2))
