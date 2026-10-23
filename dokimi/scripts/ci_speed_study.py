@@ -663,9 +663,20 @@ def git_tests_skipped(junit: dict) -> list[str]:
     return bad
 
 
+def pip_release(text: str) -> str | None:
+    """The version of a `pip --version` line. The line also names the pip's install path, which
+    holds the run's own venv directory and so differs between runs of the very same release."""
+    m = re.match(r"pip (\d+(?:\.\d+)*\S*) from ", text)
+    return m[1] if m else None
+
+
 def pip_equal(runs: list[dict]) -> bool:
-    """Every condition's venv (and Windows bootstrapped) pip is the same version."""
-    return same([r for r in runs if r.get("pip")], lambda r: r.get("pip"))
+    """Every condition's venv (and Windows bootstrapped) pip is the same version, whichever
+    run directory it was installed in. An unreadable pip line is never equal."""
+    def releases(r: dict) -> dict[str, str | None]:
+        return {label: pip_release(text) for label, text in r["pip"].items()}
+    return same([r for r in runs if r.get("pip")], releases) and \
+        None not in releases([r for r in runs if r.get("pip")][0]).values()
 
 
 def factors(family: str) -> list[str]:
@@ -974,11 +985,20 @@ def _self_order() -> None:
 
 
 def _self_pip_and_lock(tmp: Path) -> None:
-    a, b = {"id": "a", "pip": {"venv": "pip 26.2.1"}}, {"id": "b", "pip": {"venv": "pip 26.2.1"}}
-    check(pip_equal([a, b]), "equal pip rejected")
-    check(not pip_equal([a, dict(b, pip={"venv": "pip 25.0"})]), "pip mismatch accepted")
-    check(not pip_equal([a, dict(b, pip={"venv": "pip 26.2.1", "after_bootstrap": "pip 25"})]),
+    def line(version: str, run: str) -> str:  # the real `pip --version` shape, own venv path included
+        return f"pip {version} from D:\\a\\_temp\\study-lab\\runs\\{run}\\venv\\Lib\\site-packages\\pip (python 3.13)"
+    a = {"id": "a", "pip": {"venv": line("26.2.1", "a"), "after_bootstrap": line("26.2.1", "a")}}
+    b = {"id": "b", "pip": {"venv": line("26.2.1", "b"), "after_bootstrap": line("26.2.1", "b")}}
+    check(pip_equal([a, b]), "equal pip release in different run directories rejected")
+    check(not pip_equal([a, dict(b, pip={"venv": line("25.0", "b"), "after_bootstrap": line("26.2.1", "b")})]),
+          "pip mismatch accepted")
+    check(not pip_equal([a, dict(b, pip={"venv": line("26.2.1", "b"), "after_bootstrap": line("25", "b")})]),
           "bootstrap pip mismatch accepted")
+    check(not pip_equal([a, dict(b, pip={"venv": "garbled", "after_bootstrap": line("26.2.1", "b")})]),
+          "unreadable pip line accepted")
+    check(not pip_equal([dict(a, pip={"venv": "garbled"}), dict(b, pip={"venv": "garbled"})]),
+          "identical unreadable pip lines accepted")
+    check(not pip_equal([a, dict(b, pip={"venv": line("26.2.1", "b")})]), "missing bootstrap pip accepted")
     lock = tmp / "ci.lock"
     lock.write_text("# header\nuv==0.13.4 \\\n    --hash=sha256:aa \\\n    --hash=sha256:bb\n"
                     "    # via x\nother==1 \\\n    --hash=sha256:cc\n", encoding="utf-8")
@@ -1128,7 +1148,8 @@ def main(argv: list[str] | None = None) -> int:
         "pre-registered line whose covering set equals exactly one installer or distribution level, "
         "with no variation inside a same-condition pair, is condition-aligned: unresolved and "
         "unvalidated, never tolerated, and gates test_run_equivalence and distribution_test_seconds",
-        "pip equality is the pip version equal across every run of a VM, not the lock's pip: on Linux "
+        "pip equality is the pip release (the path in `pip --version` is ignored: it names each "
+        "run's own venv) equal across every run of a VM, not the lock's pip: on Linux "
         "the venv pip is the runner Python's ensurepip bootstrap (equal within a VM, not necessarily "
         "26.2.1); only the post-lock manifests are strict. The baseline is not re-bootstrapped "
         "differently from the original CI",
