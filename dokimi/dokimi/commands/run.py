@@ -23,7 +23,11 @@ def cmd_run(args: argparse.Namespace) -> None:
     out_json = Path(args.out_json).resolve()
     out_md = Path(args.out_md).resolve()
 
-    result = run_benchmark(root, spec_path)
+    try:
+        result = run_benchmark(root, spec_path)
+    except (RuntimeError, ValueError) as exc:  # a spec that cannot be read, parsed or validated
+        print(f"Error: {spec_path}: {exc}", file=sys.stderr)
+        sys.exit(2)  # 1 is the verdict code of --strict
     save_snapshot(result, out_json)
     write_run_report(result, out_md)
     print(json.dumps(result["summary"], indent=2))
@@ -67,11 +71,19 @@ def cmd_compare(args: argparse.Namespace) -> None:
     out_md = Path(args.out_md).resolve()
 
     spec_data = None
-    if spec_path:
-        import yaml
-        spec_data = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
-
-    result = compare_snapshots(base, cand, spec=spec_data)
+    try:
+        if spec_path:
+            import yaml
+            try:
+                spec_data = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, yaml.YAMLError) as exc:
+                raise ValueError(f"Invalid spec {spec_path}: {exc}") from exc
+            if spec_data is not None and not isinstance(spec_data, dict):
+                raise ValueError(f"Invalid spec {spec_path}: root must be a mapping")
+        result = compare_snapshots(base, cand, spec=spec_data)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     write_json(result, out_json)
     write_compare_report(result, out_md)
     print(json.dumps(result["diff"], indent=2))
