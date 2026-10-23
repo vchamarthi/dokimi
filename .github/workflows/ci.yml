@@ -368,8 +368,11 @@ jobs:
       # After the unlocked install and smoke test above, so a fresh resolve of the
       # ranges is still checked before the lock's pins are installed. The same
       # hash-locked file; uv's cache (pip's, above, serves only the fresh resolve).
-      # --python python, not --system: the interpreter on PATH, which `make ci-local`
-      # points at its throwaway venv.
+      # --python <path>, not --system: the interpreter on PATH (setup-python's in CI,
+      # the throwaway venv's in `make ci-local`), by its absolute path. A bare
+      # `--python python` makes uv search for it, and on the Windows runner the search
+      # hits the Microsoft Store alias in WindowsApps (exit 9009) and fails.
+      # sys.stdout.write, not print: no CR from Windows text mode in the substitution.
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
@@ -380,6 +383,8 @@ jobs:
           cache-suffix: windows-py3.13
           prune-cache: true
       - name: Install test deps
-        run: uv pip install --python python --require-hashes --compile-bytecode -r requirements.lock.txt
+        run: |
+          py="$(python -c 'import sys; sys.stdout.write(sys.executable)')"
+          uv pip install --python "$py" --require-hashes --compile-bytecode -r requirements.lock.txt
       - name: Run a few fast tests
         run: pytest -q tests/test_cli_help.py tests/test_console_encoding.py
