@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from dokimi.commands.inputs import read_text_or_exit
 from dokimi.defaults import (
     DEFAULT_ANSWER_MODEL,
     DEFAULT_ANSWER_PROVIDER,
@@ -74,7 +75,7 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
                   "at a dollar figure.", file=sys.stderr)
         return
 
-    placebo_text = _read_placebo(args.placebo_text)
+    placebo_text = read_text_or_exit(args.placebo_text, "--placebo-text")
     extractor, answerer, judge = _clients(args)
     config = AnalyzeConfig(
         artifact_ref=args.artifact,
@@ -166,7 +167,7 @@ def cmd_novelty_probe(args: argparse.Namespace) -> None:
     for note in verdict.notes:
         print(note, file=sys.stderr)
     settings = _settings(args)
-    placebo_text = _read_placebo(args.placebo_text)
+    placebo_text = read_text_or_exit(args.placebo_text, "--placebo-text")
     extractor, answerer, judge = _clients(args)
     if saved.get("extractor") == answerer.model:
         print(f"WARNING: {answerer.model} extracted these atoms, so the model under measurement "
@@ -790,16 +791,6 @@ def _settings(args: argparse.Namespace) -> RunSettings:
 
     return resolve_settings(getattr(args, "tier", None), {
         flag: getattr(args, flag, default) for flag, default in FLAG_DEFAULTS.items()})
-
-
-def _read_placebo(path: str | None) -> str | None:
-    """The `--placebo-text` file, or an exit that names it when it cannot be read."""
-    if not path:
-        return None
-    try:
-        return Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise SystemExit(f"cannot read --placebo-text {path}: {exc}") from None
 
 
 def _arms(spec: str) -> tuple[str, ...]:
