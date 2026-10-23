@@ -42,7 +42,7 @@ defaults:
 # Single-version jobs (here, in agent-quality.yml, contracts.yml, docs.yml and
 # stack-health.yml) and `make dev` use Python 3.13, not 3.14: scikit-network
 # (pulled in by ragas) has no cp314 wheels yet, so on 3.14 every install builds
-# it from source (C++ with OpenMP, unpinned build deps); the pip cache keeps the
+# it from source (C++ with OpenMP, unpinned build deps); the uv cache keeps the
 # built wheel for the 3.14 test leg. Move them to 3.14 once scikit-network ships
 # cp314 wheels.
 jobs:
@@ -132,9 +132,22 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.13'
-          cache: pip
-          cache-dependency-path: dokimi/requirements.lock.txt
-      - run: pip install --require-hashes -r requirements.lock.txt -r requirements-ci.lock.txt
+      # uv installs the same two hash-locked files into this interpreter;
+      # --compile-bytecode keeps pip's byte-compiled install. Its download cache
+      # is keyed on both locks and pruned before it is saved (see `test`).
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
+          checksum: 2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f  # uv-x86_64-unknown-linux-gnu.tar.gz
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+          enable-cache: true
+          cache-dependency-glob: |
+            dokimi/requirements.lock.txt
+            dokimi/requirements-ci.lock.txt
+          cache-suffix: typecheck
+          prune-cache: true
+      - name: Install deps
+        run: uv pip install --system --require-hashes --compile-bytecode -r requirements.lock.txt -r requirements-ci.lock.txt
       - name: mypy
         run: mypy
       # Dependency hygiene, config in [tool.deptry] of pyproject.toml: an import
@@ -171,12 +184,30 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: dokimi/requirements.lock.txt
+      # uv's download cache, not the whole environment: the key is the lock's hash
+      # plus this leg's Python version, so a changed lock or leg starts clean.
+      # Pruned before it is saved (`uv cache prune --ci` keeps wheels built from
+      # source, such as scikit-network on 3.14, and drops downloaded ones). It is
+      # saved to the Actions cache. cache-local-path keeps the on-disk copy in
+      # runner.temp, which the runner empties at the start and end of every job:
+      # without it a runner that is not GitHub-hosted would grow ~/.cache/uv.
+      # setup-uv's table of known uv checksums stops at 0.11.30, so `checksum`
+      # (the x86_64 glibc archive; any other runner fails closed) is not optional:
+      # without it the download would not be verified at all.
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
+          checksum: 2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f  # uv-x86_64-unknown-linux-gnu.tar.gz
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+          enable-cache: true
+          cache-dependency-glob: dokimi/requirements.lock.txt
+          cache-suffix: py${{ matrix.python-version }}
+          prune-cache: true
       # The lock, not the ranges: a PR's result should not depend on what was
       # released upstream that morning. test-latest below watches the ranges.
+      # --compile-bytecode: pip byte-compiles on install, uv does not by default.
       - name: Install deps
-        run: pip install --require-hashes -r requirements.lock.txt
+        run: uv pip install --system --require-hashes --compile-bytecode -r requirements.lock.txt
       # Offline by construction: pytest-socket (addopts in pyproject.toml) fails
       # any test that opens a network socket. --outcomes also checks the user
       # outcomes in tests/outcomes/: an evidence id that no test claims fails the
@@ -334,7 +365,26 @@ jobs:
         run: |
           smoke="$PWD/scripts/smoke_installed.py"
           cd "$RUNNER_TEMP" && python "$smoke"
+      # After the unlocked install and smoke test above, so a fresh resolve of the
+      # ranges is still checked before the lock's pins are installed. The same
+      # hash-locked file; uv's cache (pip's, above, serves only the fresh resolve).
+      # --python <path>, not --system: the interpreter on PATH (setup-python's in CI,
+      # the throwaway venv's in `make ci-local`), by its absolute path. A bare
+      # `--python python` makes uv search for it, and on the Windows runner the search
+      # hits the Microsoft Store alias in WindowsApps (exit 9009) and fails.
+      # sys.stdout.write, not print: no CR from Windows text mode in the substitution.
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          version: '0.13.4'  # the uv pinned in requirements-ci.lock.txt
+          checksum: ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225  # uv-x86_64-pc-windows-msvc.zip
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+          enable-cache: true
+          cache-dependency-glob: dokimi/requirements.lock.txt
+          cache-suffix: windows-py3.13
+          prune-cache: true
       - name: Install test deps
-        run: python -m pip install --require-hashes -r requirements.lock.txt
+        run: |
+          py="$(python -c 'import sys; sys.stdout.write(sys.executable)')"
+          uv pip install --python "$py" --require-hashes --compile-bytecode -r requirements.lock.txt
       - name: Run a few fast tests
         run: pytest -q tests/test_cli_help.py tests/test_console_encoding.py
