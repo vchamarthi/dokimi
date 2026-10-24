@@ -61,8 +61,9 @@ def test_report_exits_1_naming_a_corrupt_unsupported_file(tmp_path, capsys):
     assert str(batch / "t__a__m__r1" / "unsupported.json") in capsys.readouterr().err
 
 
-def test_report_exits_1_naming_a_corrupt_plan_file(tmp_path, capsys):
-    batch = _batch(tmp_path, "b1", {"_eval/plan.json": b"{not json"})
+@pytest.mark.parametrize("content", [b"{not json", b"{}", b'{"cells": 3}', b'{"cells": [1]}'])
+def test_report_exits_1_naming_a_corrupt_plan_file(tmp_path, capsys, content):
+    batch = _batch(tmp_path, "b1", {"_eval/plan.json": content})
     with pytest.raises(SystemExit) as exc:
         _run("report", str(batch))
     assert exc.value.code == 1

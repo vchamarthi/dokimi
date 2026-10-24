@@ -52,10 +52,18 @@ def _read_object(path: Path) -> dict[str, Any]:
     return rec
 
 
+def _planned_cells(plan_path: Path) -> set[str]:
+    """The cell names in ``plan.json``, or a :class:`CellFileError` when it holds no ``cells`` list of names."""
+    cells = _read_object(plan_path).get("cells")
+    if not isinstance(cells, list) or not all(isinstance(c, str) for c in cells):
+        raise CellFileError(f"{plan_path} must hold a `cells` list of cell names")
+    return set(cells)
+
+
 def load_cells(batch_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Finished cells (their ``result.json``) and the names of missing ones."""
     plan_path = batch_dir / "_eval" / "plan.json"
-    planned = set(_read_object(plan_path)["cells"]) if plan_path.is_file() else set()
+    planned = _planned_cells(plan_path) if plan_path.is_file() else set()
     started = {p.parent.name for p in batch_dir.glob("*/meta.json")}
     finished = []
     for path in sorted(batch_dir.glob("*/result.json")):
