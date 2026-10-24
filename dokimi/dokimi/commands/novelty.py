@@ -468,8 +468,22 @@ def cmd_novelty_view(args: argparse.Namespace) -> None:
     from dokimi.novelty.attribute import attribute_spans
     from dokimi.novelty.report import render_annotated_html, render_annotated_markdown
 
-    artifact = load_artifact("novelty", Path(args.novelty))
-    atoms, spans = load_atoms(args.atoms)
+    def fail(message: str) -> NoReturn:
+        print(f"Error: {message}", file=sys.stderr)
+        raise SystemExit(1)
+
+    try:
+        artifact = load_artifact("novelty", Path(args.novelty))
+    except OSError as exc:
+        fail(f"cannot read {args.novelty}: {exc}")
+    except ValueError as exc:  # not UTF-8, not JSON, or not a novelty artifact
+        fail(f"{args.novelty} is not a valid novelty artifact: {exc}")
+    try:
+        atoms, spans = load_atoms(args.atoms)
+    except OSError as exc:
+        fail(f"cannot read {args.atoms}: {exc}")
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:  # not JSON, or not an atoms record
+        fail(f"{args.atoms} is not a valid atoms file: {exc!r}")
     _warn_unread(spans, "they render as `unread`, not as text that carries nothing")
     # Re-rendering needs per-atom outcomes; the artifact carries aggregates, so a view
     # rebuilt from it alone would colour by category only. Say so instead of implying the
