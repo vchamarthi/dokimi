@@ -309,8 +309,6 @@ def cmd_novelty_routing(args: argparse.Namespace) -> None:
             queries = load_queries(args.queries)
         except RoutingInputError as exc:
             raise SystemExit(str(exc)) from None
-        except (OSError, UnicodeDecodeError) as exc:  # missing, unreadable or not UTF-8
-            raise SystemExit(f"cannot read --queries {args.queries}: {exc}") from None
     elif args.queries_from_headings:
         queries = headings_as_queries(body)
         self_derived = True

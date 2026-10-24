@@ -480,13 +480,12 @@ def test_a_query_file_is_a_list_a_queries_key_or_one_per_line(tmp_path, content,
     assert load_queries(str(path)) == queries
 
 
-def test_a_query_file_that_is_not_strings_is_refused_but_a_missing_one_is_not_masked(
-        tmp_path):
+def test_a_query_file_that_is_not_strings_or_is_missing_is_refused(tmp_path):
     path = tmp_path / "q.json"
     path.write_text(json.dumps({"queries": "a b"}), encoding="utf-8")
     with pytest.raises(RoutingInputError, match="list of strings"):
         load_queries(str(path))
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(RoutingInputError, match="cannot read --queries .*missing.json"):
         load_queries(str(tmp_path / "missing.json"))
 
 
