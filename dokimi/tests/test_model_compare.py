@@ -86,7 +86,7 @@ def test_load_run_invalid_json(tmp_path):
 def test_load_run_non_utf8_file_names_the_file(tmp_path):
     p = tmp_path / "latin1.json"
     p.write_bytes(b'{"note": "caf\xe9"}')
-    with pytest.raises(SystemExit, match=r"Error: .*latin1\.json.*not UTF-8"):
+    with pytest.raises(SystemExit, match=r"Error: Invalid JSON in .*latin1\.json: .*utf-8"):
         load_run(str(p))
 
 
