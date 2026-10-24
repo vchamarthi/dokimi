@@ -71,6 +71,10 @@ def load_run(path: str) -> dict[str, Any]:
         raise SystemExit(f"Error: Permission denied reading {path}") from exc
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Error: Invalid JSON in {path}: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise SystemExit(f"Error: {path} is not UTF-8: {exc}") from exc
+    except OSError as exc:  # a directory, an I/O error
+        raise SystemExit(f"Error: cannot read {path}: {exc.strerror or exc}") from exc
     if isinstance(data, dict):
         for section in ("answers", "evaluations"):
             try:
