@@ -114,7 +114,9 @@ def read_skill_manifest(root: Path) -> list[SkillCatalogEntry]:
 
     try:
         data = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
+    except OSError as exc:
+        raise ValueError(f"cannot read skills.yaml at {manifest_path}: {exc}") from exc
+    except (yaml.YAMLError, UnicodeDecodeError) as exc:
         raise ValueError(f"invalid skills.yaml at {manifest_path}: {exc}") from exc
 
     # uxlfoundation/skills nests the entries under ``skills:``, each with a
@@ -218,7 +220,9 @@ def read_task_manifest(
 
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    except OSError as exc:
+        raise ValueError(f"cannot read suites.json at {manifest_path}: {exc}") from exc
+    except ValueError as exc:  # JSONDecodeError, or bytes that are not UTF-8
         raise ValueError(f"invalid suites.json at {manifest_path}: {exc}") from exc
 
     entries: list[TaskCatalogEntry] = []
