@@ -34,6 +34,14 @@ def _load_custom(cls, flag: str, value):
 
 def _load_registry(args):
     from dokimi.registry import ProductRegistry
+    from pathlib import Path as _Path
+    reg_path = _Path(args.registry) if getattr(args, "registry", None) else None
+    return ProductRegistry(path=reg_path)
+
+
+def _load_registry_checked(args):
+    """`_load_registry` for the `library` commands: a bad --registry file exits 1 (benchmark keeps its own)."""
+    from dokimi.registry import ProductRegistry
     return _load_custom(ProductRegistry, "--registry", getattr(args, "registry", None))
 
 
@@ -44,7 +52,7 @@ def _load_intents(args=None):
 
 def cmd_library_list(args: argparse.Namespace) -> None:
     """List all products in the registry, optionally filtered by intent domain."""
-    registry = _load_registry(args)
+    registry = _load_registry_checked(args)
     entries = registry.list()
     domain = getattr(args, "domain", None)
     if domain:
@@ -70,7 +78,7 @@ def cmd_library_list(args: argparse.Namespace) -> None:
 
 def cmd_library_show(args: argparse.Namespace) -> None:
     """Show full details for a single product."""
-    registry = _load_registry(args)
+    registry = _load_registry_checked(args)
     try:
         entry = registry.get(args.name)
     except KeyError as exc:
