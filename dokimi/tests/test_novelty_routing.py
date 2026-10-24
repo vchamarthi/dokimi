@@ -259,6 +259,17 @@ def test_a_competitor_that_is_also_in_the_catalog_is_counted_once(tmp_path):
     assert json.loads(out.read_text(encoding="utf-8"))["n_candidates"] == 3  # perf, xpu once, db
 
 
+@pytest.mark.parametrize("content", [None, b"\xff\xfe queries"])
+def test_an_unreadable_queries_file_exits_with_a_message(tmp_path, content):
+    queries = tmp_path / "q.txt"
+    if content is not None:
+        queries.write_bytes(content)
+    args = _parse("novelty", "routing", "--artifact", _skill(tmp_path, "a", "d"),
+                  "--competitors", _skill(tmp_path, "b", "e"), "--queries", str(queries))
+    with pytest.raises(SystemExit, match=f"cannot read --queries {queries}"):
+        args.func(args)
+
+
 def test_a_catalog_that_is_not_a_directory_is_refused(tmp_path):
     args = _parse("novelty", "routing", "--artifact", _skill(tmp_path, "a", "d"),
                   "--catalog", str(tmp_path / "nope"), "--queries-from-headings")
