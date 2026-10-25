@@ -27,6 +27,7 @@ from dokimi.defaults import (
     DEFAULT_JUDGE_MODEL,
     DEFAULT_JUDGE_PROVIDER,
 )
+from dokimi.utils import read_text_input
 
 if TYPE_CHECKING:
     from dokimi.novelty.tiers import RunSettings
@@ -74,7 +75,7 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
                   "at a dollar figure.", file=sys.stderr)
         return
 
-    placebo_text = _placebo_text(args)
+    placebo_text = read_text_input(args.placebo_text, flag="--placebo-text") if args.placebo_text else None
     extractor, answerer, judge = _clients(args)
     config = AnalyzeConfig(
         artifact_ref=args.artifact,
@@ -157,7 +158,7 @@ def cmd_novelty_probe(args: argparse.Namespace) -> None:
     from dokimi.novelty.probes import build_probe_set
     from dokimi.novelty.report import build_probe_record
 
-    placebo_text = _placebo_text(args)
+    placebo_text = read_text_input(args.placebo_text, flag="--placebo-text") if args.placebo_text else None
     atoms, saved_spans = load_atoms(args.atoms)
     _warn_unread(saved_spans, "the atoms probed here leave out whatever those spans assert")
     saved = json.loads(Path(args.atoms).read_text(encoding="utf-8"))
@@ -496,16 +497,6 @@ def _warn_unread(spans: list, consequence: str) -> None:
               f"({sum(span.tokens for span in unread)} tokens) were never read by "
               f"extraction (see `extraction` in the atoms file); {consequence}",
               file=sys.stderr)
-
-
-def _placebo_text(args: argparse.Namespace) -> str | None:
-    """The `--placebo-text` file's text, or exit naming it; read before any model call is paid for."""
-    if not args.placebo_text:
-        return None
-    try:
-        return Path(args.placebo_text).read_text(encoding="utf-8")
-    except (OSError, ValueError) as exc:  # missing, a directory, or not UTF-8
-        raise SystemExit(f"cannot read --placebo-text {args.placebo_text}: {exc}") from None
 
 
 def _bundle_from_args(args: argparse.Namespace):

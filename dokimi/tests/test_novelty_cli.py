@@ -19,6 +19,7 @@ from dokimi.defaults import (
     DEFAULT_JUDGE_MODEL,
     DEFAULT_JUDGE_PROVIDER,
 )
+from dokimi.utils import InputError
 
 
 def _parse(*argv):
@@ -133,7 +134,7 @@ def test_an_unreadable_placebo_text_exits_before_any_model_call(sub, tmp_path, m
     extra = ["--atoms", str(tmp_path / "atoms.json")] if sub == "probe" else []
     args = _parse("novelty", sub, "--artifact", f"skill:{tmp_path}", *extra,
                   "--placebo-text", str(missing))
-    with pytest.raises(SystemExit, match=r"cannot read --placebo-text .*no-such-placebo\.txt"):
+    with pytest.raises(InputError, match=r"^--placebo-text .*no-such-placebo\.txt: No such file"):
         args.func(args)
 
 
