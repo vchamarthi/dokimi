@@ -110,7 +110,11 @@ def cmd_tools_preference(args: argparse.Namespace) -> None:
           + (f", stopping at ${args.max_cost_usd:g}" if args.max_cost_usd else ""))
     _print_skipped(tp.skipped_factors(doc, factors), len(doc["groups"]))
     if args.items_out:
-        Path(args.items_out).write_text(json.dumps(items, indent=1), encoding="utf-8")
+        try:
+            Path(args.items_out).write_text(json.dumps(items, indent=1), encoding="utf-8")
+        except OSError as exc:
+            print(f"Error: cannot write --items-out {args.items_out}: {exc}", file=sys.stderr)
+            raise SystemExit(1) from None
         print(f"items -> {args.items_out}")
     if args.dry_run:
         return
