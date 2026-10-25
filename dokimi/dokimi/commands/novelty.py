@@ -406,7 +406,10 @@ def cmd_novelty_shorten(args: argparse.Namespace) -> None:
     from dokimi.novelty.shorten import build_candidates, pick_best
 
     atoms, spans = load_atoms(args.atoms)
-    _kind, _name, _description, frontmatter, _body = load_artifact_text(args.artifact)
+    try:
+        _kind, _name, _description, frontmatter, _body = load_artifact_text(args.artifact)
+    except (OSError, ValueError) as exc:  # missing, unreadable or not UTF-8
+        raise SystemExit(f"cannot load --artifact {args.artifact}: {exc}") from None
     saved = json.loads(Path(args.atoms).read_text(encoding="utf-8"))
     try:
         spans, atoms, note = entry_point_only(saved.get("bundle"), spans, atoms)
