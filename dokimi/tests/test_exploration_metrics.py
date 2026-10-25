@@ -104,6 +104,15 @@ def test_fallback_scan_without_block():
     assert cs.malformed == ()
 
 
+def test_fallback_scan_ignores_wrapping_punctuation():
+    # A citation in parentheses, brackets or quotes names the file, not "(src/a.py".
+    cs = parse_final_answer(
+        "The bug (src/a.py:10-20) and [src/b.py:5], also \"src/c.py:7\" and <src/d.py:1>."
+    )
+    assert [c.path for c in cs.citations] == ["src/a.py", "src/b.py", "src/c.py", "src/d.py"]
+    assert cs.citations[0] == Citation("src/a.py", 10, 20)
+
+
 def test_normalize_path_variants():
     assert normalize_path("./a/b.py") == "a/b.py"
     assert normalize_path("/a/b.py") == "a/b.py"
