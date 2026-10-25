@@ -120,6 +120,22 @@ def test_a_missing_artifact_exits_with_a_message(capsys):
     capsys.readouterr()
 
 
+@pytest.mark.parametrize("sub", ["analyze", "probe"])
+def test_an_unreadable_placebo_text_exits_before_any_model_call(sub, tmp_path, monkeypatch):
+    (tmp_path / "SKILL.md").write_text("---\nname: s\ndescription: d\n---\n\n# S\n\nText.\n",
+                                       encoding="utf-8")
+    missing = tmp_path / "no-such-placebo.txt"
+
+    def _no_client(*_a, **_k):
+        raise AssertionError("a model client was built before the placebo file was read")
+
+    monkeypatch.setattr(novelty_cmd, "_clients", _no_client)
+    extra = ["--atoms", str(tmp_path / "atoms.json")] if sub == "probe" else []
+    args = _parse("novelty", sub, "--artifact", f"skill:{tmp_path}", *extra,
+                  "--placebo-text", str(missing))
+    with pytest.raises(SystemExit, match=r"cannot read --placebo-text .*no-such-placebo\.txt"):
+        args.func(args)
+
 
 def test_coverage_note_printed_to_stderr_for_atoms(tmp_path, monkeypatch, capsys):
     """The coverage note is printed to stderr on entry-point run."""

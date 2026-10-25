@@ -74,6 +74,7 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
                   "at a dollar figure.", file=sys.stderr)
         return
 
+    placebo_text = _placebo_text(args)
     extractor, answerer, judge = _clients(args)
     config = AnalyzeConfig(
         artifact_ref=args.artifact,
@@ -85,10 +86,7 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
         budgets=tuple(args.budgets),
         concurrency=args.concurrency,
         allow_self_judge=args.allow_self_judge,
-        placebo_text=(
-            Path(args.placebo_text).read_text(encoding="utf-8")
-            if args.placebo_text else None
-        ),
+        placebo_text=placebo_text,
         cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         seed=args.seed,
         include_resources=args.include_resources,
@@ -159,6 +157,7 @@ def cmd_novelty_probe(args: argparse.Namespace) -> None:
     from dokimi.novelty.probes import build_probe_set
     from dokimi.novelty.report import build_probe_record
 
+    placebo_text = _placebo_text(args)
     atoms, saved_spans = load_atoms(args.atoms)
     _warn_unread(saved_spans, "the atoms probed here leave out whatever those spans assert")
     saved = json.loads(Path(args.atoms).read_text(encoding="utf-8"))
@@ -189,9 +188,7 @@ def cmd_novelty_probe(args: argparse.Namespace) -> None:
             atoms, probe_set.probes, verdict.text, answerer=answerer, judge=judge,
             arms=_arms(args.arms), concurrency=args.concurrency,
             allow_self_judge=args.allow_self_judge, seed=args.seed,
-            placebo_text=(
-                Path(args.placebo_text).read_text(encoding="utf-8") if args.placebo_text else None
-            ),
+            placebo_text=placebo_text,
         )
     except (SelfJudgeError, ValueError) as exc:
         raise SystemExit(str(exc)) from None
@@ -499,6 +496,16 @@ def _warn_unread(spans: list, consequence: str) -> None:
               f"({sum(span.tokens for span in unread)} tokens) were never read by "
               f"extraction (see `extraction` in the atoms file); {consequence}",
               file=sys.stderr)
+
+
+def _placebo_text(args: argparse.Namespace) -> str | None:
+    """The `--placebo-text` file's text, or exit naming it; read before any model call is paid for."""
+    if not args.placebo_text:
+        return None
+    try:
+        return Path(args.placebo_text).read_text(encoding="utf-8")
+    except (OSError, ValueError) as exc:  # missing, a directory, or not UTF-8
+        raise SystemExit(f"cannot read --placebo-text {args.placebo_text}: {exc}") from None
 
 
 def _bundle_from_args(args: argparse.Namespace):
