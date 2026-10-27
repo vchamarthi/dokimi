@@ -19,6 +19,12 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
+from dokimi.novelty.report import (
+    _print_coverage as _print_coverage,
+    _print_headline as _print_headline,
+    _print_routing_summary as _print_routing_summary,
+)
+
 from dokimi.defaults import (
     DEFAULT_ANSWER_MODEL,
     DEFAULT_ANSWER_PROVIDER,
@@ -359,43 +365,6 @@ def cmd_novelty_routing(args: argparse.Namespace) -> None:
 
     _print_routing_summary(payload, len(competitors), self_derived)
 
-def _print_routing_summary(payload: dict, n_competitors: int, self_derived: bool) -> None:
-    """The lexical line, the model line and their caveats, printed after a routing run."""
-    # Every rate is printed with the number of queries behind it, and a self-derived one
-    # carries the triage tag on the same line, so a copied figure cannot lose either.
-    tag = "  triage: self-derived" if self_derived else ""
-    lexical = payload["lexical"]
-    print(f"lexical  R@1 {lexical['recall_at_1']}  R@3 {lexical['recall_at_3']}  "
-          f"MRR {lexical['mrr']}  n_queries {lexical['n_queries_scored']} of "
-          f"{lexical['n_queries_given']} given, vs {n_competitors} competitors{tag}"
-          + ("  (R@3 needs more than 3 candidates to mean anything)"
-             if lexical["recall_at_3"] is None else ""))
-    if lexical["n_queries_scored"] < 5:
-        n_scored = lexical["n_queries_scored"]
-        noun = "query" if n_scored == 1 else "queries"
-        print(f"WARNING: only {n_scored} {noun} scored; one query moves "
-              "a rate by 20 points or more, so do not quote it as a routing rate")
-    if "model" in payload:
-        row = payload["model"]
-        print(f"model    selection {row['selection_rate']}  "
-              f"({row['selection_rate_among_answered']} among answered; "
-              f"{row['n_abstained']} abstained, {row['n_failed']} failed)  "
-              f"[{row['model']}]  n_queries {row['n_queries']} given{tag}")
-        if row["n_abstained"]:
-            of_calls = f" of {row['n_calls']} calls" if row["repeats"] > 1 else ""
-            print(f"{row['n_abstained']}{of_calls} abstained or unparseable: the raw reply "
-                  "is under per_query[].raw_reply in the output")
-        if row["noise"]:
-            noise = row["noise"]
-            print(f"noise    {row['repeats']} repeats per query: mean agreement "
-                  f"{noise['mean_agreement']}, {noise['unstable_queries']} queries picked "
-                  f"differently across repeats; selection by repeat "
-                  f"{noise['selection_rate_by_repeat']}, half range "
-                  f"{noise['half_range']} (a crude sampling floor)")
-        print("The model figure is an upper bound on harness behaviour: a harness that "
-              "truncates descriptions in its own listing selects on less text.")
-    if self_derived:
-        print("Self-derived queries: read as triage only.")
 
 
 
@@ -868,51 +837,3 @@ def _safe(ref: str) -> str:
     """A directory name from an artifact reference (`skill:a/b` -> `skill-a-b`)."""
     safe = "".join(c if c.isalnum() or c in "-_." else "-" for c in ref).strip("-.")
     return safe or "artifact"
-
-
-def _print_headline(artifact: dict) -> None:
-    paired = artifact["paired"]
-    print(
-        f"added: {paired['lenient']['added']} (lenient) / {paired['strict']['added']} (strict), "
-        f"already knew: {paired['lenient']['redundant']}, "
-        f"degraded: {paired['lenient']['degraded']}, "
-        f"dead tokens: {artifact['spans'].get('frac_carrying_nothing')}"
-    )
-    _print_coverage(artifact.get("bundle") or {})
-    for warning in artifact.get("warnings", []):
-        print(f"WARNING {warning}", file=sys.stderr)
-
-
-def _print_coverage(bundle: dict) -> None:
-    """How much readable source text was supplied to extraction, on stdout.
-
-    The share is stated on stdout because the headline is what a user copies. A run under
-    the floor also says so on stdout: a stderr-only warning is one a user piping the
-    headline never sees, and a rate quoted off half-read skill is not a property of it.
-    """
-    from dokimi.novelty.bundle import MEASURED_SHARE_WARN_AT, Coverage
-
-    coverage = Coverage.from_record(bundle)
-    if coverage is None or not coverage.denominator("readable"):
-        return
-    share = coverage.measured_share
-    scope = "" if coverage.include_resources else " (entry point only)"
-    rerun = "" if coverage.include_resources else "; pass --include-resources to read the bundled files for extraction"
-    if share is None:
-        print("coverage: unknown extraction-read coverage (a bundled file did not decode, "
-              f"so its words are not counted){scope}")
-        print("Atom sampling is not task/fact coverage.")
-        # The share is unknowable, but a floor on what was left unread is not: for an
-        # entry-point run it is the stderr warning's figure, and a capped bundle run has one too.
-        if coverage.counted_unmeasured_share >= 1 - MEASURED_SHARE_WARN_AT:
-            part = "what this run read is" if coverage.include_resources else "the entry point is"
-            print(f"WARNING: {part} half or less of the artifact's readable words; rates "
-                  f"describe extracted atoms from that part, not the artifact{rerun}")
-        return
-    # Floor the stored four-place share so 49.99% never prints as 50% beside a warning.
-    pct = "<1%" if 0 < share < 0.01 else f"{round(share * 10000) // 100}%"
-    print(f"coverage: {pct} of the artifact's readable words were read for extraction{scope}")
-    print("Atom sampling is not task/fact coverage.")
-    if share <= MEASURED_SHARE_WARN_AT:
-        print(f"WARNING: only {pct} of the artifact's readable words were read for extraction; "
-              f"rates describe extracted atoms from that part, not the artifact{rerun}")
