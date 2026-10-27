@@ -83,6 +83,10 @@ def _run_config(config: "AnalyzeConfig") -> dict:
     """What decided this cell's numbers beyond the models: two cells compare only if these match."""
     return {
         "seed": config.seed,
+        "name": config.name, "description": config.description,
+        "frontmatter_sha256": hashlib.sha256(config.frontmatter.encode()).hexdigest(),
+        "placebo_sha256": hashlib.sha256((config.placebo_text or "").encode()).hexdigest(),
+        "concurrency": config.concurrency, "allow_self_judge": config.allow_self_judge,
         "max_atoms": config.max_atoms,
         "paraphrases": config.paraphrases,
         "reversals": config.reversals,
@@ -108,6 +112,14 @@ class AnalyzeResult:
     atoms: list = field(default_factory=list)
     spans: list = field(default_factory=list)
     measure_result: object | None = None
+    evidence: dict = field(default_factory=dict)
+
+
+def _shortening_caveat(enabled: bool, incomplete: bool) -> list[str]:
+    if enabled and incomplete:
+        return ["shortening candidates withheld: atom extraction hit its cap or "
+                "left unread spans, so full claim coverage is unknown"]
+    return []
 
 
 def kind_agreement_warnings(rows: dict[str, dict]) -> list[str]:
@@ -203,8 +215,13 @@ def analyze(
         if distorted:
             warnings.append(
                 f"{distorted} atoms are distorted or unsupported by their own spans; they "
-                "stay in the set and are visible in atoms.faithfulness"
+                "remain in the exported inventory but are quarantined from primary measurement"
             )
+
+    from .evidence import trusted_population
+
+    inventory = list(atom_list)
+    atom_list, population = trusted_population(inventory, config.verify_faithfulness, warnings)
 
     graph = needs.build_need_graph(
         config.name or config.artifact_ref, config.description, client=extractor
@@ -280,7 +297,7 @@ def analyze(
         warnings.append("content categories were not judged (--no-classify)")
 
     attributions = attribute.attribute_spans(
-        span_list, atom_list, outcomes=outcomes, categories=categories
+        span_list, inventory, outcomes=outcomes, categories=categories
     )
     oracle = RetentionOracle(client=extractor, cache_dir=config.cache_dir)
     confirmation: dict | None = None
@@ -299,7 +316,11 @@ def analyze(
             "report the extractor's citation as given"
         )
     candidates: list = []
-    if config.shorten_artifact and atom_list:
+    incomplete_extraction = (config.max_atoms is not None
+                             and len(inventory) >= config.max_atoms) or bool(extraction.unread_span_ids)
+    warnings.extend(_shortening_caveat(config.shorten_artifact, incomplete_extraction))
+    if (config.shorten_artifact and atom_list and not population["n_quarantined"]
+            and not incomplete_extraction):
         candidates = shorten.build_candidates(
             span_list, atom_list, oracle=oracle, budgets=config.budgets,
             relevance=relevance, outcomes=outcomes, categories=categories, seed=config.seed,
@@ -363,7 +384,7 @@ def analyze(
         atoms=atom_list,
         sampling=sampling,
         measure_result=measure_result,
-        span_summary=spans.span_summary(span_list, atom_list, atom_cap=config.max_atoms),
+        span_summary=spans.span_summary(span_list, inventory, atom_cap=config.max_atoms),
         by_knowledge_kind=by_knowledge_kind,
         probe_fidelity=probe_set.as_dict(),
         items=item_stats,
@@ -386,13 +407,21 @@ def analyze(
         cost=roll_up_cost([extractor, answerer, judge]),
         warnings=warnings,
     )
+    payload["population"] = population
     payload["run_config"] = _run_config(config)
-    payload["run_config"]["tier"] = settings.tier_record(n_atoms=len(atom_list))
+    payload["run_config"]["verification_policy"] = population["policy"]
+    payload["run_config"]["tier"] = settings.tier_record(n_atoms=len(inventory))
+    from .evidence import build_evidence
+
+    evidence = build_evidence(text, inventory, span_list, probe_list, measure_result,
+                              payload, [extractor, answerer, judge], extraction.as_dict(),
+                              source_bundle=artifact_bundle)
     return AnalyzeResult(
+        evidence=evidence,
         artifact=payload,
         attributions=attributions,
         candidates=candidates,
-        atoms=atom_list,
+        atoms=inventory,
         spans=span_list,
         measure_result=measure_result,
     )

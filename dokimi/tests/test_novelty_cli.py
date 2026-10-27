@@ -624,8 +624,9 @@ def test_the_headline_states_the_measured_share_and_warns_on_stdout_at_half_or_l
     artifact = dict(_minimal_artifact(), bundle=record)
     novelty_cmd._print_headline(artifact)
     out = capsys.readouterr().out
-    assert "coverage: 25% of the artifact's readable words were measured (entry point only)" in out
-    assert "WARNING: only 25% of the artifact's readable words" in out
+    assert "coverage: 25% of the artifact's readable words were read for extraction (entry point only)" in out
+    assert "atom sampling is not task/fact coverage" in out.lower()
+    assert "WARNING: only 25% of the artifact's readable words were read for extraction" in out
     assert "pass --include-resources" in out
 
     # The line is the analyzer's own: exactly half warns, just over half does not.
@@ -641,6 +642,7 @@ def test_the_headline_states_the_measured_share_and_warns_on_stdout_at_half_or_l
     novelty_cmd._print_headline(dict(artifact, bundle=dict(record, unreadable_files=1)))
     out = capsys.readouterr().out
     assert "coverage: unknown" in out and out.count("(entry point only)") == 1
+    assert "atom sampling is not task/fact coverage" in out.lower()
     assert "WARNING: the entry point is half or less" in out
     assert "pass --include-resources" in out
     # An entry point that is most of the words does not warn, as the stderr warning does not.
@@ -705,7 +707,7 @@ def test_a_tiny_non_zero_share_prints_as_under_one_percent(capsys):
               "coverage_basis": "readable"}
     novelty_cmd._print_headline(dict(_minimal_artifact(), bundle=record))
     out = capsys.readouterr().out
-    assert "coverage: <1% of the artifact's readable words were measured (entry point only)" in out
+    assert "coverage: <1% of the artifact's readable words were read for extraction (entry point only)" in out
     assert "WARNING: only <1% of the artifact's readable words" in out
 
 
@@ -719,6 +721,6 @@ def test_a_bundle_run_capped_by_the_budget_warns_without_advising_the_flag_it_pa
               "coverage_basis": "readable"}
     novelty_cmd._print_headline(dict(_minimal_artifact(), bundle=record))
     out = capsys.readouterr().out
-    assert "coverage: 25% of the artifact's readable words were measured\n" in out
+    assert "coverage: 25% of the artifact's readable words were read for extraction\n" in out
     assert "WARNING: only 25%" in out
     assert "--include-resources" not in out

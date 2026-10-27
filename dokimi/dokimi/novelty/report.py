@@ -388,6 +388,7 @@ def render_novelty_markdown(artifact: dict) -> str:
     )
     lines.append("")
 
+    lines.extend(_render_population(artifact))
     uncleared = _uncleared_conflicts(artifact)
     lines.extend(_render_conflicts(artifact, uncleared))
 
@@ -535,9 +536,10 @@ def render_annotated_html(attributions: list[SpanAttribution], *, title: str) ->
             + (f" · protected: {', '.join(row.span.protection)}" if row.span.protection else "")
         )
         body.append(
-            f'<div class="span {row.colour}" title="{html.escape(tip)}">'
+            f'<div class="span {html.escape(row.colour)}" title="{html.escape(tip)}">'
             f"{html.escape(row.span.text)}"
-            f'<span class="meta"> [{row.span.id} {row.label} {row.span.tokens}t]</span></div>'
+            f'<span class="meta"> [{html.escape(row.span.id)} {html.escape(row.label)} '
+            f'{row.span.tokens}t]</span></div>'
         )
     return (
         "<!doctype html><meta charset='utf-8'>"
@@ -572,3 +574,15 @@ def render_annotated_markdown(attributions: list[SpanAttribution], *, title: str
 def colour_of(label: str) -> str:
     """Colour name for an attribution label (kept next to the renderers)."""
     return COLOURS.get(label, "dim")
+
+
+def population_description(population: dict) -> str:
+    return (f"Primary denominator: {population['n_trusted']} supported atoms of "
+            f"{population['n_inventory']} extracted; {population['n_quarantined']} quarantined. "
+            f"Verification enabled: {population['verification_enabled']}. "
+            f"Policy: {population['policy']}. Rates describe source agreement, not coding quality.")
+
+
+def _render_population(artifact: dict) -> list[str]:
+    population = artifact.get("population")
+    return [population_description(population), ""] if population else []

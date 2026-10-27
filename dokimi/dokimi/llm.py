@@ -680,27 +680,19 @@ class LLM:
         draw: int = 0,
         cache_if: Optional[Callable[[str], bool]] = None,
     ) -> Reply:
-        """One prompt, one reply, served from the response cache when it is on.
+        """One reply, response-cached when configured.
 
-        Args:
-            system: Sent as a leading ``system`` message.
-            cache_prefix: Stable leading text (instructions, injected docs, a skill
-                document) concatenated verbatim before *prompt*. On Anthropic-family
-                models it gets a provider cache breakpoint when long enough
-                (:func:`caching.build_messages`).
-            max_tokens: Overrides the object's ceiling for this call.
-            stream: Stream the reply and measure ``usage.ttft_sec``.
-            draw: Index of an independent sample of this request: a new index gets
-                its own response-cache entry instead of replaying draw 0's.
-            cache_if: Acceptance test for storing *and* replaying a cached reply
-                (:func:`caching.keeps`).
-
-        Raises:
-            caching.CacheMiss: inside :func:`caching.replay_only`, when nothing
-                acceptable is stored; no request is sent.
+        ``system`` is a leading system message; ``cache_prefix`` precedes the prompt
+        with a provider cache breakpoint when supported. ``max_tokens`` overrides
+        the instance ceiling. ``stream`` enables TTFT measurement. ``draw`` selects
+        an independent sample; ``cache_if`` validates storage and replay.
+        Replay-only mode raises ``caching.CacheMiss`` without a request on a miss.
         """
         if max_tokens is None:
             max_tokens = self.max_tokens
+        if self.provider == "codex-cli":
+            from .codex_cli import check_capabilities
+            check_capabilities(max_tokens, self.temperature, self.seed, stream)
         api_key = self._key()
         messages, _ = caching.build_messages(
             prompt, system=system, cache_prefix=cache_prefix,
@@ -710,18 +702,18 @@ class LLM:
             litellm_model=self.litellm_model, messages=messages,
             extra=caching.draw_extra(self._cache_extra(stream, max_tokens), draw),
         )
-        hit = caching.load_response(key)
+        hit = None if self.provider == "codex-cli" else caching.load_response(key)
         if hit is not None and caching.keeps(cache_if, cast(str, hit[0])):
             return self._metered(Reply(text=hit[0], usage=hit[1]))
         if caching.replaying_only():
             raise caching.CacheMiss(key)
         reply = self._send(self._request(messages, api_key, max_tokens=max_tokens, stream=stream))
-        if reply.response is not None and not getattr(reply.response, "choices", None):
+        if (self.provider != "codex-cli" and reply.response is not None
+                and not getattr(reply.response, "choices", None)):
             raise IndexError("reply has no choices")  # as llm_call always did; not cached
         _warn_if_truncated(reply, self.model, max_tokens)
-        # A content-less reply is stored as null, as it always was.
         text = cast(str, reply.text)
-        if caching.keeps(cache_if, text):
+        if self.provider != "codex-cli" and caching.keeps(cache_if, text):
             caching.store_response(key, text, reply.usage)
         return reply
 
@@ -738,15 +730,9 @@ class LLM:
         tool_choice: Optional[str] = None,
         max_tokens: Optional[int] = None,
     ) -> Reply:
-        """A multi-turn request, optionally offering *tools*. Never response-cached.
-
-        A long system prompt gets a provider cache breakpoint
-        (:func:`caching.annotate_system_breakpoint`), because an agent loop re-sends
-        the whole conversation every turn and would otherwise pay full input price
-        for the same skill body N times over. The **response** cache is not used:
-        replaying a stored completion would skip the tool calls the loop is
-        measuring, so a hit would be a different run, not a cheaper one.
-        """
+        """Multi-turn tool chat, uncached; Codex CLI only supports completions."""
+        if self.provider == "codex-cli":
+            raise ValueError("codex-cli does not support tool-chat")
         api_key = self._key()
         messages, _ = caching.annotate_system_breakpoint(
             messages, model=self.model, provider=self.provider,
@@ -767,12 +753,11 @@ class LLM:
         with self._lock:
             return self._total
 
-    # Overridden only by the ``utils.get_llm`` delegate (``_GetLLMCompat``).
     def _route(self) -> str:
         return resolve_model(self.model, self.provider)
 
     def _key(self) -> Optional[str]:
-        return resolve_api_key(self.provider, self.api_key)
+        return None if self.provider == "codex-cli" else resolve_api_key(self.provider, self.api_key)
 
     def _cache_extra(self, stream: bool, max_tokens: Optional[int]) -> Dict[str, Any]:
         # max_tokens belongs in the key: it changes the response (a truncated or
@@ -796,6 +781,11 @@ class LLM:
         )
 
     def _send(self, request: Request) -> Reply:
+        if self.provider == "codex-cli":
+            from .codex_cli import complete
+            result = complete(self.model, request.messages)
+            return self._metered(Reply(text=result.text, usage=result.usage,
+                                       response=result, finish_reason="stop"))
         adapter = self.adapter or _default_adapter
         delay = self.retry_delay
         attempt = 0

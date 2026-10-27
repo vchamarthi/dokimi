@@ -111,6 +111,7 @@ class ProbeRun:
     response: str
     verdict: str
     confidence: float | None = None  # recorded, never scored
+    rationale: str = ""
 
     def correct(self, scoring: str) -> bool:
         """Whether this run counts as correct under ``lenient`` or ``strict``."""
@@ -132,6 +133,7 @@ class ProbeRun:
             "response": self.response,
             "verdict": self.verdict,
             "confidence": self.confidence,
+            "rationale": self.rationale,
         }
 
 
@@ -268,13 +270,13 @@ def run_measurement(
             response, confidence = _answer(probe.question, contexts.get(arm), answerer)
         except Exception as exc:  # a provider failure is a missing datum, not a wrong answer
             response, confidence = f"<error: {exc}>", None
-            verdict = ERRORED
+            verdict, rationale = ERRORED, "answer unavailable"
         else:
-            verdict = _grade(probe, response, judge)
+            verdict, rationale = _grade_evidence(probe, response, judge)
         return ProbeRun(
             atom_id=probe.atom_id, probe_kind=probe.kind, arm=arm,
             question=probe.question, response=response, verdict=verdict,
-            confidence=confidence,
+            confidence=confidence, rationale=rationale,
         )
 
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
@@ -311,6 +313,10 @@ def _is_complete_answer(reply: str) -> bool:
 
 
 def _grade(probe: Probe, response: str, judge: LLMClient) -> str:
+    return _grade_evidence(probe, response, judge)[0]
+
+
+def _grade_evidence(probe: Probe, response: str, judge: LLMClient) -> tuple[str, str]:
     """The judge's verdict, or ``ERRORED`` when its reply names none.
 
     A named verdict outside the scale is read as ``wrong_other``, as before; a reply with
@@ -322,13 +328,14 @@ def _grade(probe: Probe, response: str, judge: LLMClient) -> str:
         question=probe.question, expected=probe.expected, response=response[:4000]
     )
     try:
-        raw = judge.json_object(prompt, usable=_names_a_verdict).get("verdict")
+        result = judge.json_object(prompt, usable=_names_a_verdict)
+        raw = result.get("verdict")
     except Exception:
-        return ERRORED
+        return ERRORED, "judge unavailable"
     verdict = raw.strip() if isinstance(raw, str) else ""
     if not verdict:
-        return ERRORED
-    return verdict if verdict in VERDICTS else "wrong_other"
+        return ERRORED, "judge returned no verdict"
+    return (verdict if verdict in VERDICTS else "wrong_other"), str(result.get("why", ""))
 
 
 def _names_a_verdict(reply: dict) -> bool:

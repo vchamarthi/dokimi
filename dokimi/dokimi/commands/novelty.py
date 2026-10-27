@@ -31,7 +31,7 @@ from dokimi.defaults import (
 if TYPE_CHECKING:
     from dokimi.novelty.tiers import RunSettings
 
-PROVIDERS = ["openai", "anthropic", "amazon-bedrock", "google-vertex", "openrouter", "openai-codex"]
+PROVIDERS = ["codex-cli", "openai", "anthropic", "amazon-bedrock", "google-vertex", "openrouter", "openai-codex"]
 
 
 def cmd_novelty_analyze(args: argparse.Namespace) -> None:
@@ -105,15 +105,21 @@ def cmd_novelty_analyze(args: argparse.Namespace) -> None:
     out_dir = Path(args.out_dir) if args.out_dir else _default_dir(args.artifact)
     out_json = Path(args.out_json) if args.out_json else out_dir / "novelty.json"
     save_artifact("novelty", result.artifact, out_json)
+    from dokimi.novelty.evidence import render_evidence_html
+
+    save_artifact("novelty_evidence", result.evidence, out_dir / "evidence.json")
     out_md = out_json.with_suffix(".md")
     out_md.write_text(render_novelty_markdown(result.artifact), encoding="utf-8")
     title = f"{artifact_bundle.name or args.artifact} × {answerer.model}"
     view_path = out_dir / ("annotated.html" if args.view_format == "html" else "annotated.md")
     render = render_annotated_html if args.view_format == "html" else render_annotated_markdown
     view_path.parent.mkdir(parents=True, exist_ok=True)
-    view_path.write_text(render(result.attributions, title=title), encoding="utf-8")
+    rendered = (render_evidence_html(result.evidence) if args.view_format == "html"
+                else render(result.attributions, title=title))
+    view_path.write_text(rendered, encoding="utf-8")
 
     print(f"OK Saved novelty artifact: {out_json}")
+    print(f"OK Saved reusable evidence: {out_dir / 'evidence.json'}")
     print(f"OK Saved novelty report:   {out_md}")
     print(f"OK Saved annotated view:   {view_path}")
     _print_headline(result.artifact)
@@ -479,29 +485,10 @@ def cmd_novelty_shorten(args: argparse.Namespace) -> None:
 
 
 def cmd_novelty_view(args: argparse.Namespace) -> None:
-    """Re-render the annotated view from a saved novelty artifact plus its atoms."""
-    from dokimi.artifacts import load_artifact
-    from dokimi.novelty.atoms import load_atoms
-    from dokimi.novelty.attribute import attribute_spans
-    from dokimi.novelty.report import render_annotated_html, render_annotated_markdown
+    """Re-render saved evidence without model calls (legacy atoms supported)."""
+    from dokimi.novelty.evidence import view_saved
 
-    artifact = load_artifact("novelty", Path(args.novelty))
-    atoms, spans = load_atoms(args.atoms)
-    _warn_unread(spans, "they render as `unread`, not as text that carries nothing")
-    # Re-rendering needs per-atom outcomes; the artifact carries aggregates, so a view
-    # rebuilt from it alone would colour by category only. Say so instead of implying the
-    # colours mean more than they do.
-    attributions = attribute_spans(spans, atoms)
-    render = render_annotated_html if args.format == "html" else render_annotated_markdown
-    title = f"{artifact['artifact']['ref']} × {artifact['model']}"
-    out = Path(args.out) if args.out else Path(f"annotated.{args.format}")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render(attributions, title=title), encoding="utf-8")
-    print(f"OK Saved annotated view: {out}")
-    print(
-        "NOTE colours here come from spans and categories only. For outcome colouring "
-        "(added / degraded), render during `novelty analyze`, which has the paired runs."
-    )
+    view_saved(args)
 
 
 def _warn_unread(spans: list, consequence: str) -> None:
@@ -679,8 +666,8 @@ def register(sub, positive_int) -> None:
     items_p.set_defaults(func=cmd_novelty_items)
 
     view_p = novelty_sub.add_parser("view", help="Re-render the annotated artifact view")
-    view_p.add_argument("--novelty", required=True, help="novelty.json from `novelty analyze`")
-    view_p.add_argument("--atoms", required=True, help="atoms.json from `novelty atoms`")
+    view_p.add_argument("--novelty", required=True, help="evidence.json (or legacy novelty.json) from `novelty analyze`")
+    view_p.add_argument("--atoms", default=None, help="atoms.json from `novelty atoms`")
     view_p.add_argument("--format", default="html", choices=["html", "md"])
     view_p.add_argument("--out", default=None)
     view_p.set_defaults(func=cmd_novelty_view)
@@ -776,6 +763,9 @@ def _clients(args: argparse.Namespace):
     """Build the three role clients, defaulting so roles never silently collapse."""
     from dokimi.novelty.client import default_judge
 
+    if args.provider == "codex-cli" and not args.judge_model:
+        raise SystemExit("codex-cli requires explicit --judge-model (no provider fallback)")
+
     if args.judge_model:
         judge_model, judge_provider = args.judge_model, args.judge_provider or args.provider
     else:
@@ -795,6 +785,11 @@ def _clients(args: argparse.Namespace):
 def _client(model: str, provider: str, role: str, args: argparse.Namespace):
     from dokimi.novelty.client import LLMClient
 
+    if provider == "codex-cli":
+        if not getattr(args, "unlimited_output", False) or getattr(args, "max_tokens", None):
+            raise SystemExit("codex-cli requires --unlimited-output and no --max-tokens")
+        if getattr(args, "max_usd", None) is not None:
+            raise SystemExit("codex-cli has unknown dollar cost; cannot enforce --max-usd")
     return LLMClient(
         model=model, provider=provider, role=role,
         max_tokens=getattr(args, "max_tokens", None),
@@ -837,6 +832,8 @@ def _usd(text: str) -> float:
 
 
 def _add_spend_cap(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--unlimited-output", action="store_true",
+                        help="Deliberately allow uncapped Codex CLI output tokens")
     parser.add_argument("--max-usd", type=_usd, default=None, dest="max_usd",
                         help="Stop the run once its model calls have cost this much (USD, "
                              "all roles together; calls in flight can overshoot it). A call "
@@ -887,7 +884,7 @@ def _print_headline(artifact: dict) -> None:
 
 
 def _print_coverage(bundle: dict) -> None:
-    """How much of the artifact's readable words this run read, on stdout.
+    """How much readable source text was supplied to extraction, on stdout.
 
     The share is stated on stdout because the headline is what a user copies. A run under
     the floor also says so on stdout: a stderr-only warning is one a user piping the
@@ -900,23 +897,22 @@ def _print_coverage(bundle: dict) -> None:
         return
     share = coverage.measured_share
     scope = "" if coverage.include_resources else " (entry point only)"
-    # The warnings below need readable words outside the entry point, so the flag always adds some.
-    rerun = "" if coverage.include_resources else "; pass --include-resources to measure the bundled files"
+    rerun = "" if coverage.include_resources else "; pass --include-resources to read the bundled files for extraction"
     if share is None:
-        print("coverage: unknown (a bundled file did not decode, so its words are not "
-              f"counted){scope}")
+        print("coverage: unknown extraction-read coverage (a bundled file did not decode, "
+              f"so its words are not counted){scope}")
+        print("Atom sampling is not task/fact coverage.")
         # The share is unknowable, but a floor on what was left unread is not: for an
         # entry-point run it is the stderr warning's figure, and a capped bundle run has one too.
         if coverage.counted_unmeasured_share >= 1 - MEASURED_SHARE_WARN_AT:
             part = "what this run read is" if coverage.include_resources else "the entry point is"
-            print(f"WARNING: {part} half or less of the artifact's readable words, so every "
-                  f"rate here describes that part, not the artifact{rerun}")
+            print(f"WARNING: {part} half or less of the artifact's readable words; rates "
+                  f"describe extracted atoms from that part, not the artifact{rerun}")
         return
-    # Floored on the 4-place share, in integers: a float product floors 0.29 to 28, and
-    # 49.99% must not print as "50%" beside a "below 50%" warning. A true 49.996% is already
-    # 0.5 by the time it is stored.
+    # Floor the stored four-place share so 49.99% never prints as 50% beside a warning.
     pct = "<1%" if 0 < share < 0.01 else f"{round(share * 10000) // 100}%"
-    print(f"coverage: {pct} of the artifact's readable words were measured{scope}")
+    print(f"coverage: {pct} of the artifact's readable words were read for extraction{scope}")
+    print("Atom sampling is not task/fact coverage.")
     if share <= MEASURED_SHARE_WARN_AT:
-        print(f"WARNING: only {pct} of the artifact's readable words were measured, so every "
-              f"rate here describes that part, not the artifact{rerun}")
+        print(f"WARNING: only {pct} of the artifact's readable words were read for extraction; "
+              f"rates describe extracted atoms from that part, not the artifact{rerun}")
