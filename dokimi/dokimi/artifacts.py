@@ -46,6 +46,7 @@ SCHEMA_VERSIONS: dict[str, str] = {
     "plugin_delta": "plugin_delta.v1",
     "subject_scorecard": "subject_scorecard.v2",
     "novelty": "novelty.v1",
+    "novelty_evidence": "novelty_evidence.v1",
     "task_runs": "task_runs.v1",
     "explore_runs": "explore_runs.v1",
     "guidance_reach": "guidance_reach.v1",

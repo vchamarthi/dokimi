@@ -73,7 +73,7 @@ points up:
 | tracks | `runner`, `report`, `subjects`, `novelty`, `harnesses`, `context`, `repos`, `explore`, `tool_preference`, `external`, `dashboard`, `orchestrator`, `datasets_export`, `coverage`, `task_formats`, and the checkers `config_check`, `schema_check`, `schema_compat` |
 | evaluation | `eval`, `personas`, `questions`, `treatments`, `plugins` |
 | components | `ingest`, `metrics`, `gate`, `mcp`, `skills`, `agent_profiles` |
-| foundation | `__init__` (the `dokimi` package itself), `_version`, `artifacts`, `records`, `llm`, `process`, `caching`, `config`, `registry`, `intents`, `defaults`, `console`, `utils`, `metrics/usage.py` |
+| foundation | `__init__` (the `dokimi` package itself), `_version`, `artifacts`, `records`, `llm`, `codex_cli`, `process`, `caching`, `config`, `registry`, `intents`, `defaults`, `console`, `utils`, `metrics/usage.py` |
 
 So `report` (a track) can call `gate` (a component), and `gate` cannot import
 `report`. The sections below follow the tracks, not the layers.
@@ -189,7 +189,10 @@ whose absolute calibration is poor.
 5. `dokimi/novelty/shorten.py` scores shortening candidates on five
    separate axes (tokens, knowledge, value, protection, routing), with a
    cache-backed retention oracle in `dokimi/novelty/retention.py`.
-6. `dokimi/novelty/report.py` writes the scorecard block and an
+6. `dokimi/novelty/evidence.py` exports the complete reusable evidence bundle and renders
+   source-linked probe answers without model calls. `dokimi/codex_cli.py` is a foundation
+   leaf invoked by `llm` through `process.run` for isolated subscription CLI probes.
+7. `dokimi/novelty/report.py` writes the scorecard block and an
    annotated HTML view of the artifact; `dokimi/gate/novelty_gate.py`
    turns the numbers into soft gates (the novelty track's use of `gate/`).
 

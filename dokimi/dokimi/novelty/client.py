@@ -103,6 +103,7 @@ class LLMClient:
     transport: Transport | None = None
     usage: list[UsageRecord] = field(default_factory=list)
     calls: int = 0
+    runtime: list[dict[str, Any]] = field(default_factory=list, init=False)
     cap: SpendCap | None = None
 
     def text(
@@ -124,11 +125,11 @@ class LLMClient:
         """
         if self.cap is not None:
             self.cap.before_call(self.model)
+        self.calls += 1  # failed calls may still be billed; absent usage keeps cost unknown
         if self.transport is not None:
             reply, usage = self.transport(prompt, system)
         else:
             reply, usage = self._default_transport(prompt, system, accept=accept, draw=draw)
-        self.calls += 1
         if usage is not None:
             # UsageRecord is frozen; re-stamp the role so cost rolls up per role.
             self.usage.append(replace(usage, role=self.role))
@@ -173,7 +174,7 @@ class LLMClient:
         input_tokens = sum(u.prompt_tokens for u in self.usage)
         output_tokens = sum(u.completion_tokens for u in self.usage)
         costs = [u.cost_usd for u in self.usage]
-        priced = costs and None not in costs
+        priced = costs and None not in costs and len(self.usage) == self.calls
         usd = round(sum(c for c in costs if c is not None), 6) if priced else None
         return {
             "model": self.model,
@@ -189,7 +190,16 @@ class LLMClient:
         self, prompt: str, system: str | None, *, accept: Accept | None = None,
         draw: int = 0,
     ) -> tuple[str, UsageRecord | None]:
-        from dokimi.llm import llm_call_with_usage
+        from dokimi.llm import LLM, llm_call_with_usage
+
+        if self.provider == 'codex-cli':
+            from dokimi.codex_cli import Completion
+
+            reply = LLM(self.model, self.provider, max_tokens=self.max_tokens).complete(
+                prompt, system=system, cache_if=accept, draw=draw)
+            if isinstance(reply.response, Completion) and reply.response.runtime not in self.runtime:
+                self.runtime.append(reply.response.runtime)
+            return reply.text or '', reply.usage
 
         return llm_call_with_usage(
             prompt,

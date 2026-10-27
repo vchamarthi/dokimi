@@ -1,0 +1,956 @@
+{
+  "schema_version": "novelty_evidence.v1",
+  "source_text": "---\nname: accel-tuning\ndescription: Configure the accelerator for training runs\n---\n\n# Accelerator tuning\n\nEnable the accelerator with `--accel`. Do not enable it on driver 1.0.\n\n## Background\n\nThe project began as a research prototype with many contributors.\n",
+  "source_sha256": "sha256:2ce4d1677619196d83eed99518ef810056795a78a71c79250b2f928464d85c4d",
+  "config": {
+    "seed": 0,
+    "name": "",
+    "description": "",
+    "frontmatter_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "placebo_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "concurrency": 5,
+    "allow_self_judge": false,
+    "max_atoms": 120,
+    "paraphrases": 1,
+    "reversals": true,
+    "arms": [
+      "no_artifact",
+      "full"
+    ],
+    "budgets": [
+      0.75,
+      0.5
+    ],
+    "include_resources": false,
+    "resource_roles": null,
+    "stages": {
+      "verify": true,
+      "classify": true,
+      "shorten": false,
+      "confirm_carriers": false
+    },
+    "prompts_sha256": "sha256:29e96ecf7b3f336694b6a46cb0551c673528ae978da0efbf7e8be25a4030b7ff",
+    "verification_policy": "supported-only-v1",
+    "tier": null,
+    "roles": [
+      {
+        "role": "extractor",
+        "provider": "openai",
+        "requested_model": "extractor-m",
+        "max_tokens": null,
+        "output_cap_enforced": true,
+        "transport_policy": null
+      },
+      {
+        "role": "answerer",
+        "provider": "openai",
+        "requested_model": "answerer-m",
+        "max_tokens": null,
+        "output_cap_enforced": true,
+        "transport_policy": null
+      },
+      {
+        "role": "judge",
+        "provider": "openai",
+        "requested_model": "judge-m",
+        "max_tokens": null,
+        "output_cap_enforced": true,
+        "transport_policy": null
+      }
+    ]
+  },
+  "config_sha256": "sha256:5cd043f7e8738584ac9a52b9e6ce7900ad923aa9e0c2aaca307f767f8ef952aa",
+  "extractor": "extractor-m",
+  "bundle": {},
+  "cap": 120,
+  "extraction": {
+    "unread_span_ids": [],
+    "unread_tokens": 0,
+    "unparseable_span_ids": [],
+    "unusable_span_ids": [],
+    "retried_batches": 0,
+    "calls": 1,
+    "batches": 1,
+    "last_error": ""
+  },
+  "atoms": [
+    {
+      "id": "abd6900398f",
+      "statement": "The --accel flag enables the accelerator.",
+      "question": "Which flag enables the accelerator?",
+      "answer": "--accel",
+      "kind": "proposition",
+      "tags": [
+        "procedural"
+      ],
+      "span_ids": [
+        "s0002"
+      ],
+      "faithfulness": "supported",
+      "meta": {
+        "verification": {
+          "verdict": "supported",
+          "why": "verbatim"
+        }
+      }
+    },
+    {
+      "id": "a7dd40428ea",
+      "statement": "The accelerator must not be enabled on driver 1.0.",
+      "question": "May the accelerator be enabled on driver 1.0?",
+      "answer": "No.",
+      "kind": "contract",
+      "tags": [
+        "negative_constraint",
+        "version_bound"
+      ],
+      "span_ids": [
+        "s0003"
+      ],
+      "faithfulness": "supported",
+      "meta": {
+        "verification": {
+          "verdict": "supported",
+          "why": "verbatim"
+        }
+      }
+    }
+  ],
+  "spans": [
+    {
+      "id": "s0001",
+      "kind": "sentence",
+      "text": "---\nname: accel-tuning\ndescription:",
+      "start": 0,
+      "end": 35,
+      "heading_path": [],
+      "protection": [],
+      "tokens": 9,
+      "atom_ids": [],
+      "source": "fixture"
+    },
+    {
+      "id": "s0002",
+      "kind": "sentence",
+      "text": "Configure the accelerator for training runs\n---",
+      "start": 36,
+      "end": 83,
+      "heading_path": [],
+      "protection": [],
+      "tokens": 12,
+      "atom_ids": [
+        "abd6900398f"
+      ],
+      "source": "fixture"
+    },
+    {
+      "id": "s0003",
+      "kind": "heading",
+      "text": "# Accelerator tuning",
+      "start": 85,
+      "end": 105,
+      "heading_path": [
+        "Accelerator tuning"
+      ],
+      "protection": [],
+      "tokens": 5,
+      "atom_ids": [
+        "a7dd40428ea"
+      ],
+      "source": "fixture"
+    },
+    {
+      "id": "s0004",
+      "kind": "sentence",
+      "text": "Enable the accelerator with `--accel`.",
+      "start": 107,
+      "end": 145,
+      "heading_path": [
+        "Accelerator tuning"
+      ],
+      "protection": [],
+      "tokens": 10,
+      "atom_ids": [],
+      "source": "fixture"
+    },
+    {
+      "id": "s0005",
+      "kind": "sentence",
+      "text": "Do not enable it on driver 1.0.",
+      "start": 146,
+      "end": 177,
+      "heading_path": [
+        "Accelerator tuning"
+      ],
+      "protection": [
+        "negation",
+        "version_gate"
+      ],
+      "tokens": 8,
+      "atom_ids": [],
+      "source": "fixture"
+    },
+    {
+      "id": "s0006",
+      "kind": "heading",
+      "text": "## Background",
+      "start": 179,
+      "end": 192,
+      "heading_path": [
+        "Accelerator tuning",
+        "Background"
+      ],
+      "protection": [],
+      "tokens": 3,
+      "atom_ids": [],
+      "source": "fixture"
+    },
+    {
+      "id": "s0007",
+      "kind": "sentence",
+      "text": "The project began as a research prototype with many contributors.",
+      "start": 194,
+      "end": 259,
+      "heading_path": [
+        "Accelerator tuning",
+        "Background"
+      ],
+      "protection": [],
+      "tokens": 16,
+      "atom_ids": [],
+      "source": "fixture"
+    }
+  ],
+  "outcomes": {
+    "abd6900398f": "added",
+    "a7dd40428ea": "added"
+  },
+  "probes": [
+    {
+      "atom_id": "abd6900398f",
+      "kind": "direct",
+      "question": "Which flag enables the accelerator?",
+      "expected": "--accel",
+      "expect_refusal": false
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "kind": "direct",
+      "question": "May the accelerator be enabled on driver 1.0?",
+      "expected": "No.",
+      "expect_refusal": false
+    },
+    {
+      "atom_id": "abd6900398f",
+      "kind": "paraphrase",
+      "question": "Reworded: Which flag enables the accelerator?",
+      "expected": "--accel",
+      "expect_refusal": false
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "kind": "paraphrase",
+      "question": "Reworded: May the accelerator be enabled on driver 1.0?",
+      "expected": "No.",
+      "expect_refusal": false
+    },
+    {
+      "atom_id": "abd6900398f",
+      "kind": "reversal",
+      "question": "Is it safe to ignore any of this: The --accel flag enables the accelerator.?",
+      "expected": "Refuse the premise. The truth is: The --accel flag enables the accelerator.",
+      "expect_refusal": true
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "kind": "reversal",
+      "question": "Is it safe to ignore any of this: The accelerator must not be enabled on driver 1.0.?",
+      "expected": "Refuse the premise. The truth is: The accelerator must not be enabled on driver 1.0.",
+      "expect_refusal": true
+    }
+  ],
+  "runs": [
+    {
+      "atom_id": "abd6900398f",
+      "probe_kind": "direct",
+      "arm": "no_artifact",
+      "question": "Which flag enables the accelerator?",
+      "response": "I am not sure\nconfidence: 0.2",
+      "verdict": "wrong_other",
+      "confidence": 0.2,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "probe_kind": "direct",
+      "arm": "no_artifact",
+      "question": "May the accelerator be enabled on driver 1.0?",
+      "response": "I am not sure\nconfidence: 0.2",
+      "verdict": "wrong_other",
+      "confidence": 0.2,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "abd6900398f",
+      "probe_kind": "paraphrase",
+      "arm": "no_artifact",
+      "question": "Reworded: Which flag enables the accelerator?",
+      "response": "I am not sure\nconfidence: 0.2",
+      "verdict": "wrong_other",
+      "confidence": 0.2,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "probe_kind": "paraphrase",
+      "arm": "no_artifact",
+      "question": "Reworded: May the accelerator be enabled on driver 1.0?",
+      "response": "I am not sure\nconfidence: 0.2",
+      "verdict": "wrong_other",
+      "confidence": 0.2,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "abd6900398f",
+      "probe_kind": "reversal",
+      "arm": "no_artifact",
+      "question": "Is it safe to ignore any of this: The --accel flag enables the accelerator.?",
+      "response": "I am not sure\nconfidence: 0.2",
+      "verdict": "wrong_other",
+      "confidence": 0.2,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "probe_kind": "reversal",
+      "arm": "no_artifact",
+      "question": "Is it safe to ignore any of this: The accelerator must not be enabled on driver 1.0.?",
+      "response": "I am not sure\nconfidence: 0.2",
+      "verdict": "wrong_other",
+      "confidence": 0.2,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "abd6900398f",
+      "probe_kind": "direct",
+      "arm": "full",
+      "question": "Which flag enables the accelerator?",
+      "response": "INFORMED answer\nconfidence: 0.8",
+      "verdict": "correct_complete",
+      "confidence": 0.8,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "probe_kind": "direct",
+      "arm": "full",
+      "question": "May the accelerator be enabled on driver 1.0?",
+      "response": "INFORMED answer\nconfidence: 0.8",
+      "verdict": "correct_complete",
+      "confidence": 0.8,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "abd6900398f",
+      "probe_kind": "paraphrase",
+      "arm": "full",
+      "question": "Reworded: Which flag enables the accelerator?",
+      "response": "INFORMED answer\nconfidence: 0.8",
+      "verdict": "correct_complete",
+      "confidence": 0.8,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "probe_kind": "paraphrase",
+      "arm": "full",
+      "question": "Reworded: May the accelerator be enabled on driver 1.0?",
+      "response": "INFORMED answer\nconfidence: 0.8",
+      "verdict": "correct_complete",
+      "confidence": 0.8,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "abd6900398f",
+      "probe_kind": "reversal",
+      "arm": "full",
+      "question": "Is it safe to ignore any of this: The --accel flag enables the accelerator.?",
+      "response": "INFORMED answer\nconfidence: 0.8",
+      "verdict": "correct_complete",
+      "confidence": 0.8,
+      "rationale": "stub"
+    },
+    {
+      "atom_id": "a7dd40428ea",
+      "probe_kind": "reversal",
+      "arm": "full",
+      "question": "Is it safe to ignore any of this: The accelerator must not be enabled on driver 1.0.?",
+      "response": "INFORMED answer\nconfidence: 0.8",
+      "verdict": "correct_complete",
+      "confidence": 0.8,
+      "rationale": "stub"
+    }
+  ],
+  "arms": [
+    "no_artifact",
+    "full"
+  ],
+  "roles": [
+    {
+      "model": "extractor-m",
+      "provider": "openai",
+      "role": "extractor",
+      "llm_calls": 8,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "usd": null,
+      "requested_model": "extractor-m",
+      "served_model": null,
+      "max_tokens": null,
+      "output_cap_enforced": true,
+      "transport_policy": null,
+      "usage": []
+    },
+    {
+      "model": "answerer-m",
+      "provider": "openai",
+      "role": "answerer",
+      "llm_calls": 12,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "usd": null,
+      "requested_model": "answerer-m",
+      "served_model": null,
+      "max_tokens": null,
+      "output_cap_enforced": true,
+      "transport_policy": null,
+      "usage": []
+    },
+    {
+      "model": "judge-m",
+      "provider": "openai",
+      "role": "judge",
+      "llm_calls": 12,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "usd": null,
+      "requested_model": "judge-m",
+      "served_model": null,
+      "max_tokens": null,
+      "output_cap_enforced": true,
+      "transport_policy": null,
+      "usage": []
+    }
+  ],
+  "population": {
+    "policy": "supported-only-v1",
+    "verification_enabled": true,
+    "n_inventory": 2,
+    "n_trusted": 2,
+    "n_quarantined": 0,
+    "trusted_ids": [
+      "abd6900398f",
+      "a7dd40428ea"
+    ],
+    "quarantined_ids": []
+  },
+  "novelty": {
+    "generated_at": "2026-10-26T00:00:00Z",
+    "artifact": {
+      "kind": "skill",
+      "ref": "fixture",
+      "ref_digest": null,
+      "tokens": 63
+    },
+    "model": "answerer-m",
+    "provider": "openai",
+    "judge_model": "judge-m",
+    "atoms": {
+      "n": 2,
+      "n_probed": 2,
+      "sampling": "cap-per-artifact:120",
+      "faithfulness": {
+        "supported": 2,
+        "distorted": 0,
+        "unsupported": 0,
+        "unchecked": 0
+      }
+    },
+    "paired": {
+      "lenient": {
+        "added": 1.0,
+        "redundant": 0.0,
+        "degraded": 0.0,
+        "still_missing": 0.0,
+        "n_paired": 4,
+        "n_unpaired_dropped": 0,
+        "ci95_added": null
+      },
+      "strict": {
+        "added": 1.0,
+        "redundant": 0.0,
+        "degraded": 0.0,
+        "still_missing": 0.0,
+        "n_paired": 4,
+        "n_unpaired_dropped": 0,
+        "ci95_added": null
+      }
+    },
+    "k0": {
+      "lenient": 0.0,
+      "strict": 0.0
+    },
+    "by_knowledge_kind": {
+      "lenient": {
+        "scoring": "lenient",
+        "with_arm": "full",
+        "min_probes": 5,
+        "note": "tag slices overlap (an atom may carry several tags); do not sum them",
+        "by_kind": {
+          "contract": {
+            "n_paired": 2,
+            "underpowered": true
+          },
+          "proposition": {
+            "n_paired": 2,
+            "underpowered": true
+          }
+        },
+        "by_tag": {
+          "negative_constraint": {
+            "n_paired": 2,
+            "underpowered": true
+          },
+          "procedural": {
+            "n_paired": 2,
+            "underpowered": true
+          },
+          "version_bound": {
+            "n_paired": 2,
+            "underpowered": true
+          }
+        }
+      },
+      "strict": {
+        "scoring": "strict",
+        "with_arm": "full",
+        "min_probes": 5,
+        "note": "tag slices overlap (an atom may carry several tags); do not sum them",
+        "by_kind": {
+          "contract": {
+            "n_paired": 2,
+            "underpowered": true
+          },
+          "proposition": {
+            "n_paired": 2,
+            "underpowered": true
+          }
+        },
+        "by_tag": {
+          "negative_constraint": {
+            "n_paired": 2,
+            "underpowered": true
+          },
+          "procedural": {
+            "n_paired": 2,
+            "underpowered": true
+          },
+          "version_bound": {
+            "n_paired": 2,
+            "underpowered": true
+          }
+        }
+      }
+    },
+    "probes": {
+      "n_probes": 6,
+      "by_kind": {
+        "paraphrase": {
+          "generated": 2,
+          "kept": 2,
+          "rejected": 0,
+          "reasons": {},
+          "malformed_rate": 0.0
+        },
+        "reversal": {
+          "generated": 2,
+          "kept": 2,
+          "rejected": 0,
+          "reasons": {},
+          "malformed_rate": 0.0
+        }
+      },
+      "malformed_rate": 0.0,
+      "checks": "mechanical: anchor tokens preserved, polarity, answer leak"
+    },
+    "items": {
+      "kind_agreement": {
+        "no_artifact": {
+          "arm": "no_artifact",
+          "scoring": "lenient",
+          "n_atoms_multi_kind": 2,
+          "n_agree": 2,
+          "agreement": 1.0,
+          "disagreeing": []
+        },
+        "full": {
+          "arm": "full",
+          "scoring": "lenient",
+          "n_atoms_multi_kind": 2,
+          "n_agree": 2,
+          "agreement": 1.0,
+          "disagreeing": []
+        }
+      },
+      "discrimination": {
+        "measured": false,
+        "scoring": "lenient",
+        "arm": "full",
+        "models": [
+          "answerer-m"
+        ],
+        "reason": "1 cell(s) over 1 distinct model(s): discrimination needs at least 3 *models* as respondents. Repeated runs of one model are repeated measurements of the same respondent, not more respondents",
+        "per_atom": [],
+        "n_atoms": 0,
+        "n_non_discriminating": 0,
+        "n_undefined": 0,
+        "n_negative": 0
+      }
+    },
+    "bundle": {},
+    "arms": {
+      "lenient": {
+        "no_artifact": 0.0,
+        "full": 1.0
+      },
+      "strict": {
+        "no_artifact": 0.0,
+        "full": 1.0
+      }
+    },
+    "controls": {
+      "reversal_resisted": 1.0,
+      "abstentions": {
+        "no_artifact": 0,
+        "full": 0
+      },
+      "confidence_correlation": 1.0,
+      "order_independent": null
+    },
+    "categories": {
+      "scaffolding": 0,
+      "novel_useful": 2,
+      "known_useful": 0,
+      "novel_inert": 0,
+      "known_inert": 0,
+      "harmful_conflicting": 0
+    },
+    "conflicts": [],
+    "conflict_coverage": {
+      "pairs_compared": 1,
+      "pairs_total": 1
+    },
+    "spans": {
+      "n": 7,
+      "tokens": 63,
+      "tokens_carrying_nothing": 46,
+      "frac_carrying_nothing": 0.7302,
+      "n_unread": 0,
+      "tokens_unread": 0,
+      "n_atoms_indexed": 2,
+      "capped_atom_set": false,
+      "sole_carrier": 2,
+      "protected": 1,
+      "by_kind": {
+        "heading": 2,
+        "sentence": 5
+      }
+    },
+    "extraction": {
+      "unread_span_ids": [],
+      "unread_tokens": 0,
+      "unparseable_span_ids": [],
+      "unusable_span_ids": [],
+      "retried_batches": 0,
+      "calls": 1,
+      "batches": 1,
+      "last_error": ""
+    },
+    "attribution": {
+      "spans_by_label": {
+        "harmful": 0,
+        "degraded": 0,
+        "added": 2,
+        "unread": 0,
+        "protected": 1,
+        "redundant": 0,
+        "still_missing": 0,
+        "inert": 0,
+        "unscored": 0,
+        "empty": 4
+      },
+      "tokens_by_label": {
+        "harmful": 0,
+        "degraded": 0,
+        "added": 17,
+        "unread": 0,
+        "protected": 8,
+        "redundant": 0,
+        "still_missing": 0,
+        "inert": 0,
+        "unscored": 0,
+        "empty": 38
+      },
+      "token_share_by_label": {
+        "harmful": 0.0,
+        "degraded": 0.0,
+        "added": 0.2698,
+        "unread": 0.0,
+        "protected": 0.127,
+        "redundant": 0.0,
+        "still_missing": 0.0,
+        "inert": 0.0,
+        "unscored": 0.0,
+        "empty": 0.6032
+      },
+      "legend": {
+        "green": "carries knowledge the model did not have without this artifact",
+        "grey": "redundant: an atom the model already answered without this artifact (this wins over still_missing); or inert: no atom has a measured outcome, and one is judged inert or scaffolding (this wins over an unprobed useful atom)",
+        "red": "carries a conflicting atom, or one the artifact made the model get wrong",
+        "amber": "protected: a negation, version gate, ordering constraint or threshold",
+        "blue": "states something the model got wrong with and without it, and nothing it already knew: rephrase or promote it",
+        "plain": "carries atoms with no measured outcome and none judged inert or scaffolding (unprobed atoms judged useful, or atoms the value judge did not answer for), so no colour is claimed",
+        "hatched": "not read: every extraction call for this span failed, so what it carries is unknown",
+        "dim": "no extracted atom \u2014 an upper bound on dead weight, not proof of it"
+      }
+    },
+    "needs": {
+      "nodes": 3,
+      "edges": 1,
+      "by_type": {
+        "intent": 0,
+        "evidence": 1,
+        "action": 1,
+        "constraint": 1,
+        "decision": 0
+      },
+      "by_path_class": {
+        "core": 1,
+        "branch": 0,
+        "rare_critical": 1,
+        "supporting": 0,
+        "out_of_scope": 1
+      }
+    },
+    "relevance": {
+      "n_atoms_matched": 1,
+      "n_atoms_unmatched": 1,
+      "out_of_scope_atoms": 0,
+      "frac_out_of_scope": 0.0,
+      "mean_relevance": 0.25
+    },
+    "retention": {
+      "decisions": 0,
+      "llm_escalations": 0,
+      "escalation_rate": 0.0,
+      "llm_errors": 0,
+      "band": [
+        0.25,
+        0.85
+      ],
+      "adjudicator": "extractor-m"
+    },
+    "shortening": [],
+    "views": {
+      "dead_weight": [
+        {
+          "span_id": "s0007",
+          "tokens": 16,
+          "kind": "sentence",
+          "heading_path": [
+            "Accelerator tuning",
+            "Background"
+          ],
+          "text": "The project began as a research prototype with many contributors."
+        },
+        {
+          "span_id": "s0004",
+          "tokens": 10,
+          "kind": "sentence",
+          "heading_path": [
+            "Accelerator tuning"
+          ],
+          "text": "Enable the accelerator with `--accel`."
+        },
+        {
+          "span_id": "s0001",
+          "tokens": 9,
+          "kind": "sentence",
+          "heading_path": [],
+          "text": "---\nname: accel-tuning\ndescription:"
+        },
+        {
+          "span_id": "s0006",
+          "tokens": 3,
+          "kind": "heading",
+          "heading_path": [
+            "Accelerator tuning",
+            "Background"
+          ],
+          "text": "## Background"
+        }
+      ],
+      "sole_carriers": [
+        {
+          "span_id": "s0002",
+          "atoms": [
+            "abd6900398f"
+          ],
+          "tokens": 12,
+          "protection": [],
+          "text": "Configure the accelerator for training runs\n---"
+        },
+        {
+          "span_id": "s0003",
+          "atoms": [
+            "a7dd40428ea"
+          ],
+          "tokens": 5,
+          "protection": [],
+          "text": "# Accelerator tuning"
+        }
+      ],
+      "topics": [
+        {
+          "heading_path": [
+            "Accelerator tuning"
+          ],
+          "spans": 3,
+          "tokens": 23,
+          "labels": {
+            "added": 1,
+            "empty": 1,
+            "protected": 1
+          },
+          "added_spans": 1,
+          "dead_tokens": 10,
+          "unread_tokens": 0
+        },
+        {
+          "heading_path": [],
+          "spans": 2,
+          "tokens": 21,
+          "labels": {
+            "empty": 1,
+            "added": 1
+          },
+          "added_spans": 1,
+          "dead_tokens": 9,
+          "unread_tokens": 0
+        },
+        {
+          "heading_path": [
+            "Accelerator tuning",
+            "Background"
+          ],
+          "spans": 2,
+          "tokens": 19,
+          "labels": {
+            "empty": 2
+          },
+          "added_spans": 0,
+          "dead_tokens": 19,
+          "unread_tokens": 0
+        }
+      ]
+    },
+    "cost": {
+      "llm_calls": 32,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "usd": null,
+      "by_role": [
+        {
+          "model": "extractor-m",
+          "provider": "openai",
+          "role": "extractor",
+          "llm_calls": 8,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "usd": null
+        },
+        {
+          "model": "answerer-m",
+          "provider": "openai",
+          "role": "answerer",
+          "llm_calls": 12,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "usd": null
+        },
+        {
+          "model": "judge-m",
+          "provider": "openai",
+          "role": "judge",
+          "llm_calls": 12,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "usd": null
+        }
+      ]
+    },
+    "caveats": [
+      "Rates are paired per probe; trust signs and rankings, not second decimals. Two independent judges agreed 0.664 on the 6-way verdict scale and 0.852 on the correct-ish binary collapse, so every rate is reported under both scorings.",
+      "`frac_carrying_nothing` is an upper bound on dead weight, and is only a property of the artifact when `spans.capped_atom_set` is false. Three extractors agreed on which spans carry knowledge (Jaccard 0.87-0.99), so it is not mostly unformalizable knowledge; a capped atom set, however, inflated it tenfold in the study.",
+      "Novelty is a property of the (artifact, model) pair. Do not compare across models.",
+      "Per-atom-kind and per-tag rates are labels, not measurements. With extraction held fixed, two independent relabellings reproduced the tag rates to within 0.08 (six of nine tags at kappa 0.52-0.73), so tag slices are quotable; `rare-critical` (0.39-0.45) and `temporal` are not, and the 5-way atom `type` vocabulary agrees at only 0.32-0.38. Gate on the protection tags (`routing`, `negative-constraint`, `version-bound`) or on nothing; report shape slices without gating on them.",
+      "Per-artifact `added` is a profile, not a ranking: the cross-artifact ranking destabilizes below a 0.75 probe budget, so keep any `added` gate soft."
+    ],
+    "warnings": [
+      "span citations were not confirmed (--no-confirm-carriers): the span views report the extractor's citation as given"
+    ],
+    "population": {
+      "policy": "supported-only-v1",
+      "verification_enabled": true,
+      "n_inventory": 2,
+      "n_trusted": 2,
+      "n_quarantined": 0,
+      "trusted_ids": [
+        "abd6900398f",
+        "a7dd40428ea"
+      ],
+      "quarantined_ids": []
+    },
+    "run_config": {
+      "seed": 0,
+      "name": "",
+      "description": "",
+      "frontmatter_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "placebo_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "concurrency": 5,
+      "allow_self_judge": false,
+      "max_atoms": 120,
+      "paraphrases": 1,
+      "reversals": true,
+      "arms": [
+        "no_artifact",
+        "full"
+      ],
+      "budgets": [
+        0.75,
+        0.5
+      ],
+      "include_resources": false,
+      "resource_roles": null,
+      "stages": {
+        "verify": true,
+        "classify": true,
+        "shorten": false,
+        "confirm_carriers": false
+      },
+      "prompts_sha256": "sha256:29e96ecf7b3f336694b6a46cb0551c673528ae978da0efbf7e8be25a4030b7ff",
+      "verification_policy": "supported-only-v1",
+      "tier": null
+    }
+  }
+}

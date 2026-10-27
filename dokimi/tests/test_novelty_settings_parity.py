@@ -1,19 +1,13 @@
 # Copyright (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-"""No run setting, bill, forfeit or tier record the novelty CLI produces differs from ``main``.
+"""Snapshot the CLI's settings, call counts, warnings and tier records.
 
-Resolving the tier-controlled flags in one place (``tiers.resolve_settings``) is a
-refactor, and a refactor changes no number (#4). Each case runs the real CLI -- with
-scripted clients, so nothing leaves the machine -- and keeps what the flags decide: the
-``--estimate-only`` bill and its stderr, and for a measured run the ``run_config`` (tier
-record included), the warnings, the model calls per role, the atom cap and the probe kinds.
-``tests/fixtures/novelty_settings_main.json`` is this module's ``_capture`` output on
-``main`` at f76a760. The module uses only interfaces that exist there, so it runs there
-unchanged; to recapture, from a ``main`` checkout's ``dokimi/`` with this file and the
-JSON copied in::
-
-    python -m tests.test_novelty_settings_parity --write
+The fixture began as a refactor parity capture on main at f76a760. The native evidence
+repair deliberately updates analyze records for supported-only primary measurement:
+unverified inventories no longer trigger probes. Other command/estimate cells remain
+unchanged. Behavior tests in test_novelty_evidence independently prove quarantine.
+Regenerate intentionally with ``python -m tests.test_novelty_settings_parity --write``.
 """
 
 from __future__ import annotations
@@ -112,7 +106,8 @@ def _kept(argv: list[str], work: Path) -> dict[str, Any]:
     return {}
 
 
-COVERAGE_LINES = ("coverage: ", "WARNING: only ")
+COVERAGE_LINES = ("coverage: ", "WARNING: only ",
+                  "Atom sampling is not task/fact coverage.")
 
 
 def _without_coverage_headline(text: str) -> str:
@@ -149,9 +144,10 @@ def _check_headline(coverage: dict[str, Any]) -> None:
     pct = f"{int(Decimal(str(share)).scaleb(2).to_integral_value(ROUND_FLOOR))}%"
     assert printed, "a run with a record must print its coverage line"
     assert printed[0].startswith(
-        f"coverage: {pct} of the artifact's readable words were measured"
+        f"coverage: {pct} of the artifact's readable words were read for extraction"
     ), printed
-    warned = [line.startswith(f"WARNING: only {pct} ") for line in printed[1:]]
+    assert printed[1] == "Atom sampling is not task/fact coverage."
+    warned = [line.startswith(f"WARNING: only {pct} ") for line in printed[2:]]
     assert warned == ([True] if share <= 0.5 else []), printed
 
 
@@ -202,7 +198,7 @@ def _capture(name: str, tmp_path: Path) -> list[dict[str, Any]]:
 
 
 @pytest.mark.parametrize("name", list(CASES))
-def test_no_setting_bill_or_tier_record_differs_from_main(name, tmp_path):
+def test_settings_bill_and_tier_record_match_verified_policy(name, tmp_path):
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     steps = _capture(name, tmp_path)
     coverage = [step.pop("coverage") for step in steps]

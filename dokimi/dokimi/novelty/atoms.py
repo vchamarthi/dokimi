@@ -460,12 +460,15 @@ def verify_atoms(
             continue
         source = "\n".join(by_id[s].text for s in atom.span_ids if s in by_id)
         try:
-            verdict = str(client.json_object(
+            verification = client.json_object(
                 _VERIFY_PROMPT.format(statement=atom.statement, source=source),
                 usable=_names_a_faithfulness_verdict,
-            ).get("verdict", "")).strip()
+            )
+            verdict = str(verification.get("verdict", "")).strip()
+            atom.meta["verification"] = verification
         except Exception:
             verdict = ""
+            atom.meta["verification"] = {"why": "verification unavailable"}
         atom.faithfulness = verdict if verdict in tally and verdict != "unchecked" else "unchecked"
         tally[atom.faithfulness] += 1
     return tally

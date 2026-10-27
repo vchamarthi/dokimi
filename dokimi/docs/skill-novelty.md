@@ -38,7 +38,7 @@ flowchart LR
 
 ## The four outcomes
 
-Every knowledge atom in the artifact gets probed twice against the same model — once with no
+Every source-supported knowledge atom in the artifact gets probed twice against the same model — once with no
 artifact in context, once with it — and both answers are graded by a *different* model. The outcome
 is one of four, and they are exhaustive:
 
@@ -495,7 +495,7 @@ Things to know before reading a bundle result:
   at runtime is the agentic track's question (`skill-agent:`), not this one.
 - **The two modes are different cells.** `include_resources` is recorded in `run_config`;
   an entry-point run and a bundle run of the same skill are not comparable numbers. A run
-  that read half or less of the readable words says so on stdout (the `coverage:` line
+  that read half or less of the readable words for extraction says so on stdout (the `coverage:` line
   and a `WARNING`), a bundle run held back by the word budgets included; an entry-point run
   also says so in `warnings`. When a bundled file did not decode the share is unknowable:
   stdout prints `coverage: unknown` (still warning if the words it counted show the run read
@@ -503,6 +503,10 @@ Things to know before reading a bundle result:
   `bundle.measured_share` (for an entry-point run, `1 - measurable_outside_share` to 4
   places, which nets out the role decisions below; `outside_share` is the
   on-disk figure, and the two differ for a skill whose only resources are its evals).
+  This is extraction-read coverage, not task or fact coverage: an atom cap such as
+  `--max-atoms 4` can sample only four claims even when 100% of the text was read.
+  Shortening candidates are withheld when extraction hits its atom cap or leaves unread
+  spans, because the sampled claims cannot establish full claim coverage.
 - **A skill's own `evals/` are not content.** They are the question/answer keys for
   testing the skill, so extracting atoms from them would credit the skill with delivering
   its own test set. Excluded by default (10 of the 33 corpus skills ship them), with the
@@ -786,6 +790,73 @@ Such a check is at `info` severity, except `harmful_atoms` and `protection_invar
 A cell with no check measured at all is `NOT MEASURED`, not `PASS`.
 Failing `warn`-severity checks and the artifact's own `warnings` also surface in the
 scorecard's top-level `warnings`.
+
+## Native Codex CLI subscription workflow
+
+Use the installed, authenticated Codex CLI with an explicit model for each role:
+
+```bash
+python cli.py novelty analyze --artifact skill:/path/to/skill \
+  --provider codex-cli --model YOUR_ANSWER_MODEL \
+  --judge-model YOUR_DIFFERENT_JUDGE_MODEL --extract-model YOUR_EXTRACTOR_MODEL \
+  --unlimited-output --out-dir results/novelty/native
+python cli.py novelty view --novelty results/novelty/native/evidence.json \
+  --out results/novelty/native/rerender.html
+```
+
+Model names above are placeholders: use names available to your subscription. The requested
+model is passed unchanged; there is no API-provider fallback or implicit judge selection.
+The CLI does not expose a served-model identity, so the evidence records it as null.
+The extractor may share the judge model; the answerer and judge must differ unless you
+explicitly permit self-judging. This remains model-judged source agreement, not coding quality.
+
+The transport targets Codex CLI 0.156.1. Set `DOKIMI_CODEX_EXECUTABLE` to an explicit
+executable path when multiple installations coexist (for example an older Windows PATH entry
+and a newer app CLI). An invalid selection fails instead of falling back to another binary. It sends prompts on stdin from an empty temporary
+working directory, ignores user config and rules, disables project documents, memory,
+skill discovery, plugins, tools, hooks and MCP, and rejects tool events or incomplete JSONL
+turns. Existing subscription authentication is left to Codex itself: no tokens are read,
+copied into evidence, or redirected through a different `CODEX_HOME`.
+
+Codex CLI cannot enforce an output-token ceiling. `--unlimited-output` is deliberate consent
+to that limitation; `--max-tokens` and `--max-usd` are rejected for this provider. Sampling
+controls and tool-chat are unsupported. Token usage includes cached input tokens; dollar
+cost stays null, never zero. This transport's isolated prompt differs from an interactive
+Codex coding session. Live qualification must exercise the installed CLI and subscription;
+offline parser tests alone do not establish end-to-end isolation or model availability.
+
+Each analysis writes `evidence.json` alongside the summary. This versioned bundle contains
+source spans, the full atom inventory, verification verdicts and reasons, every generated
+accepted probe and expected key, every measured arm's answer, grade and rationale, source
+and configuration hashes, role/provider/requested-model identities and per-call usage.
+It is also accepted as an atoms input by the existing atom loader. Keep it private when the
+source or answers are private. Native HTML links source passages to all their probe evidence,
+including reversals, failures, and missing measurements. `novelty view` renders this saved
+bundle without source files, cache inspection, or model calls. Legacy summary-plus-atoms
+views remain readable but cannot reconstruct evidence they never saved.
+
+Primary measurements use policy `supported-only-v1`. Unsupported, distorted, unchecked,
+and unavailable verification results remain in the exported inventory but are quarantined
+from the primary denominator. Skipping verification gives no trusted measurements (including the `triage` tier,
+which disables verification). Use the `standard` tier or the default run for primary rates. The
+summary and bundle record inventory, trusted and quarantined counts and IDs, the verification
+switch and policy. Compare runs only with matching policies, configurations and populations;
+older summaries measured a different population. Shortening candidates are withheld when
+any atom is quarantined. Nothing automatically rewrites or deletes a skill.
+
+The Codex CLI transport records its executable SHA-256, CLI version, isolation
+policy, and accepted startup diagnostics in evidence role metadata and the
+configuration hash. Construction does not inspect the installed CLI; preflight
+runs on the first call and is cached by executable identity. Injected transports
+have unknown runtime identity. Served-model identity and unpriced dollars remain
+unknown. Codex response-cache storage and replay are disabled because old cached
+answers do not carry qualified runtime identity; replay-only mode therefore misses.
+The only accepted error item is the exact Code Mode host-disabled diagnostic,
+after thread start and before turn start. All tool items and later errors fail
+closed. Per-call configuration suppresses unstable-feature warnings and disables
+Code Mode; user configuration is never edited. A requested output cap is recorded
+as enforced only for transports that support it.
+
 
 ## Cost, and how it is kept down
 

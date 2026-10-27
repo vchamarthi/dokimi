@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+  "title": "Reusable novelty evidence v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source_text",
+    "source_sha256",
+    "config_sha256",
+    "config",
+    "population",
+    "novelty",
+    "roles",
+    "atoms",
+    "spans",
+    "probes",
+    "runs",
+    "arms"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "novelty_evidence.v1"
+    },
+    "source_text": {
+      "type": "string"
+    },
+    "source_sha256": {
+      "type": "string"
+    },
+    "config_sha256": {
+      "type": "string"
+    },
+    "config": {
+      "type": "object"
+    },
+    "population": {
+      "type": "object",
+      "required": [
+        "policy",
+        "verification_enabled",
+        "n_inventory",
+        "n_trusted",
+        "n_quarantined",
+        "trusted_ids",
+        "quarantined_ids"
+      ],
+      "properties": {
+        "policy": {
+          "const": "supported-only-v1"
+        },
+        "verification_enabled": {
+          "type": "boolean"
+        },
+        "n_inventory": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_trusted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_quarantined": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trusted_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quarantined_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "novelty": {
+      "type": "object"
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "provider",
+          "requested_model",
+          "served_model",
+          "usd",
+          "usage",
+          "output_cap_enforced"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "requested_model": {
+            "type": "string"
+          },
+          "served_model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usd": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "output_cap_enforced": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "atoms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "statement",
+          "question",
+          "answer",
+          "faithfulness",
+          "span_ids"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "statement": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "faithfulness": {
+            "type": "string"
+          },
+          "span_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "start",
+          "end"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "atom_id",
+          "kind",
+          "question",
+          "expected",
+          "expect_refusal"
+        ],
+        "properties": {
+          "atom_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "expect_refusal": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "atom_id",
+          "probe_kind",
+          "question",
+          "arm",
+          "response",
+          "verdict",
+          "rationale"
+        ],
+        "properties": {
+          "atom_id": {
+            "type": "string"
+          },
+          "probe_kind": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "arm": {
+            "type": "string"
+          },
+          "response": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "arms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

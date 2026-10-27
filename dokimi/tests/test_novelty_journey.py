@@ -166,7 +166,7 @@ def test_the_stdout_headline_says_how_much_of_the_artifact_was_read(tmp_path, sk
     measured = json.loads((entry_out / "novelty.json").read_text(encoding="utf-8"))[
         "bundle"]["measured_share"]
     assert measured < 0.5
-    assert f"coverage: {int(Decimal(str(measured)).scaleb(2).to_integral_value(ROUND_FLOOR))}% of the artifact's readable words were measured " \
+    assert f"coverage: {int(Decimal(str(measured)).scaleb(2).to_integral_value(ROUND_FLOOR))}% of the artifact's readable words were read for extraction " \
            "(entry point only)" in printed
     assert "WARNING: only" in printed and "pass --include-resources" in printed
 
@@ -176,7 +176,7 @@ def test_the_stdout_headline_says_how_much_of_the_artifact_was_read(tmp_path, sk
          "--include-resources", "--model", "model-a", "--judge-model", "judge-m",
          "--out-dir", str(bundle_out))
     printed = capsys.readouterr().out
-    assert "coverage: 100% of the artifact's readable words were measured\n" in printed
+    assert "coverage: 100% of the artifact's readable words were read for extraction\n" in printed
     assert "WARNING: only" not in printed
 
 
