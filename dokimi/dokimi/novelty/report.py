@@ -578,7 +578,7 @@ def colour_of(label: str) -> str:
 
 
 def population_description(population: dict) -> str:
-    return (f"Primary denominator: {population['n_trusted']} supported atoms of "
+    return (f"Primary denominator: {int(population['n_trusted'])} supported atoms of "
             f"{population['n_inventory']} extracted; {population['n_quarantined']} quarantined. "
             f"Verification enabled: {population['verification_enabled']}. "
             f"Policy: {population['policy']}. Rates describe source agreement, not coding quality.")

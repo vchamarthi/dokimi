@@ -232,3 +232,15 @@ def test_runtime_and_diagnostics_are_part_of_configuration_hash():
     third = evidence()
     assert second['config_sha256'] != third['config_sha256']
     assert third['roles'][1]['served_model'] is None
+
+
+def test_population_report_requires_a_numeric_supported_count():
+    import pytest
+
+    from dokimi.novelty.report import population_description
+
+    with pytest.raises(ValueError):
+        population_description({
+            'n_trusted': 'not-a-count', 'n_inventory': 1, 'n_quarantined': 0,
+            'verification_enabled': True, 'policy': 'supported-only-v1',
+        })
