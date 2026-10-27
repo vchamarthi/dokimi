@@ -244,3 +244,33 @@ def test_tools_and_errors_rejected_during_valid_turn(event):
 
     with pytest.raises(ValueError):
         parse_stream(stream(THREAD, TURN, event, MESSAGE, DONE))
+
+
+def test_explicit_executable_takes_precedence_over_an_old_path_install(
+        tmp_path, monkeypatch, runtime_stub):
+    from dokimi import codex_cli
+
+    old, selected = tmp_path / 'old', tmp_path / 'selected'
+    old.write_bytes(b'old version')
+    selected.write_bytes(b'chosen version')
+    monkeypatch.setenv('DOKIMI_CODEX_EXECUTABLE', str(selected))
+    monkeypatch.setattr(codex_cli.shutil, 'which',
+                        lambda name: str(selected if name == str(selected) else old))
+    runner = process.FakeRunner(lambda _: process.reply('codex-cli 0.164.0-alpha.11.1\n'))
+    monkeypatch.setattr(process, 'run', runner)
+    codex_cli._runtime.cache_clear()
+    identity = runtime_stub()
+    assert identity['executable'] == str(selected.resolve())
+    assert runner.calls[0].argv[0] == str(selected.resolve())
+
+
+def test_invalid_explicit_executable_never_falls_back_to_path(monkeypatch, runtime_stub):
+    from dokimi import codex_cli
+
+    monkeypatch.setenv('DOKIMI_CODEX_EXECUTABLE', 'unavailable-selected-cli')
+    monkeypatch.setattr(codex_cli.shutil, 'which', lambda name: '/old/codex' if name == 'codex' else None)
+    runner = process.FakeRunner()
+    monkeypatch.setattr(process, 'run', runner)
+    with pytest.raises(ValueError, match='executable unavailable'):
+        runtime_stub()
+    assert runner.calls == []

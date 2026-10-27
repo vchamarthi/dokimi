@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -45,9 +46,9 @@ class Completion:
 
 
 def runtime_identity() -> dict[str, Any]:
-    executable = shutil.which('codex')
+    executable = shutil.which(os.environ.get('DOKIMI_CODEX_EXECUTABLE') or 'codex')
     if executable is None:
-        raise ValueError('codex-cli executable unavailable; install Codex and check PATH')
+        raise ValueError('codex-cli executable unavailable; check DOKIMI_CODEX_EXECUTABLE or PATH')
     path = Path(executable).resolve()
     stat = path.stat()
     return dict(_runtime(str(path), stat.st_dev, stat.st_ino, stat.st_size,

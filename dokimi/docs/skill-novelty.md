@@ -810,7 +810,9 @@ The CLI does not expose a served-model identity, so the evidence records it as n
 The extractor may share the judge model; the answerer and judge must differ unless you
 explicitly permit self-judging. This remains model-judged source agreement, not coding quality.
 
-The transport targets Codex CLI 0.156.1. It sends prompts on stdin from an empty temporary
+The transport targets Codex CLI 0.156.1. Set `DOKIMI_CODEX_EXECUTABLE` to an explicit
+executable path when multiple installations coexist (for example an older Windows PATH entry
+and a newer app CLI). An invalid selection fails instead of falling back to another binary. It sends prompts on stdin from an empty temporary
 working directory, ignores user config and rules, disables project documents, memory,
 skill discovery, plugins, tools, hooks and MCP, and rejects tool events or incomplete JSONL
 turns. Existing subscription authentication is left to Codex itself: no tokens are read,
