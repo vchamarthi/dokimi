@@ -479,3 +479,6 @@ runs `pip check` and the installed-package smoke test,
    that does not resolve, a link to a source file that does not exist, or a
    list that nests differently on the site than on GitHub fails it. On a push
    to `main`, **deploy** publishes the build to GitHub Pages.
+
+Pipe ownership during interrupted reader startup is synchronized by `dokimi.process_io`;
+only `dokimi.process` starts external processes.
