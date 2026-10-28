@@ -252,13 +252,16 @@ def setup_versions(steps: Any, path: str, unknown: list[str], keys: set[str],
             continue
         value = given.get("python-version")
         if "python-version-file" in given and value in (None, ""):
-            unknown.append(f"{where} reads its Python version from {given['python-version-file']}")
+            file = given["python-version-file"]
+            unknown.append(f"{where} reads its Python version from {file if isinstance(file, (str, int, float)) else 'a file'}")
         out |= _setup(value, where, unknown, keys, inputs)
     return out
 
 
 def _setup(value: Any, where: str, unknown: list[str], keys: set[str], inputs: set[str] | None) -> set[Version]:
     """The versions one ``python-version`` value pins; a matrix or input reference goes to ``keys`` or ``inputs``."""
+    if isinstance(value, str) and "\n" in value.strip():  # setup-python takes one version per line
+        return set().union(*(_setup(line, where, unknown, keys, inputs) for line in value.strip().splitlines()))
     ref = _REF.match(value.strip()) if isinstance(value, str) else None
     if ref and ref["ctx"] == "matrix":
         keys.add(ref["a"] or ref["b"])
@@ -268,8 +271,7 @@ def _setup(value: Any, where: str, unknown: list[str], keys: set[str], inputs: s
         return set()
     out: set[Version] = set()
     if isinstance(value, (str, int, float)):
-        for item in str(value).strip().splitlines():  # setup-python takes one version per line
-            out |= _value("python-version", item, where, unknown)
+        out |= _value("python-version", str(value).strip(), where, unknown)
     return out
 
 

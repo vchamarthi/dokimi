@@ -88,6 +88,19 @@ def test_setup_versions_reads_a_version_file_only_without_a_version():
     assert unknown == [f"a setup step of ci.yml reads its Python version from {f}" for f in "bc"]
 
 
+def test_setup_versions_reads_a_reference_on_any_line_of_a_value():
+    keys: set[str] = set()
+    steps = [{"with": {"python-version": "3.12\n${{ matrix.py }}\n3.13"}}]
+    assert setup_versions(steps, "ci.yml", [], keys) == {(12, False), (13, False)}
+    assert keys == {"py"}
+
+
+def test_setup_versions_names_a_version_file_only_when_it_is_a_scalar():
+    unknown: list[str] = []
+    setup_versions([{"with": {"python-version-file": ["a", "b"]}}], "ci.yml", unknown, set())
+    assert unknown == ["a setup step of ci.yml reads its Python version from a file"]
+
+
 def test_setup_versions_reads_inputs_only_in_a_called_workflow():
     steps = [{"with": {"python-version": "${{ inputs.py }}"}}, {"with": {"python-version": "${{ inputs['v'] }}"}}]
     keys: set[str] = set()
