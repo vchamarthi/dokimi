@@ -63,8 +63,8 @@ def compare_snapshots(base_path: Path, cand_path: Path, spec: dict | None = None
     base = _load_snapshot(base_path, "base")
     cand = _load_snapshot(cand_path, "candidate")
 
-    for path, payload in ((base_path, base), (cand_path, cand)):
-        _check_summary(path, payload, "base" if path == base_path else "candidate")
+    for path, payload, role in ((base_path, base, "base"), (cand_path, cand, "candidate")):
+        _check_summary(path, payload, role)
 
     diff = {
         "docs": cand["summary"]["docs"] - base["summary"]["docs"],

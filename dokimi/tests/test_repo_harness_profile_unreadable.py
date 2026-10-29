@@ -20,7 +20,7 @@ def _run(*argv: str) -> None:
 
 def _bad_profile(tmp_path, kind: str):
     path = tmp_path / "profile.yaml"
-    path.write_bytes(b"name: \xff\xfe\n")
+    path.write_bytes(b"[" * 100000 if kind == "deep" else b"name: \xff\xfe\n")
     if kind == "unreadable":
         if os.name == "nt" or os.geteuid() == 0:
             pytest.skip("file permissions do not stop this user from reading")
@@ -29,7 +29,7 @@ def _bad_profile(tmp_path, kind: str):
     return path
 
 
-@pytest.mark.parametrize("kind", ["non-utf8", "unreadable"])
+@pytest.mark.parametrize("kind", ["non-utf8", "unreadable", "deep"])
 def test_load_profile_names_the_file_it_cannot_read(tmp_path, kind):
     path = _bad_profile(tmp_path, kind)
     with pytest.raises(ProfileError, match="profile.yaml"):
@@ -48,7 +48,7 @@ def test_load_profile_names_a_file_whose_read_raises_oserror(tmp_path, monkeypat
         load_profile(path)
 
 
-@pytest.mark.parametrize("kind", ["non-utf8", "unreadable"])
+@pytest.mark.parametrize("kind", ["non-utf8", "unreadable", "deep"])
 def test_repo_budget_exits_1_on_a_harness_file_it_cannot_read(tmp_path, capsys, kind):
     path = _bad_profile(tmp_path, kind)
     with pytest.raises(SystemExit) as exc:
@@ -57,7 +57,7 @@ def test_repo_budget_exits_1_on_a_harness_file_it_cannot_read(tmp_path, capsys, 
     assert str(path) in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("kind", ["non-utf8", "unreadable"])
+@pytest.mark.parametrize("kind", ["non-utf8", "unreadable", "deep"])
 def test_repo_reach_exits_1_on_a_harness_file_it_cannot_read(tmp_path, capsys, kind):
     path = _bad_profile(tmp_path, kind)
     with pytest.raises(SystemExit) as exc:

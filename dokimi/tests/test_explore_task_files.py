@@ -24,6 +24,11 @@ def _exit_message(argv) -> str:
     ("content", "message"),
     [
         (b"id: [unclosed\n", "is not valid UTF-8 YAML"),
+        pytest.param(b"", "missing required field(s)", id="empty"),
+        pytest.param(b"# only a comment\n", "missing required field(s)", id="comment-only"),
+        pytest.param(b"~\n", "missing required field(s)", id="null"),
+        pytest.param(b"id: x\nquery: q\nreferences: []\n", "has no references", id="empty-references"),
+        pytest.param(b"id: x\nquery: q\nreferences:\n", "references must be a list", id="null-references"),
         (bytes([0xFF, 0xFE, 0x00]), "is not valid UTF-8 YAML"),
         pytest.param(b"[" * 100000, "is not valid UTF-8 YAML", id="too-deep"),
         (b"- just\n- a list\n", "must hold a YAML mapping"),

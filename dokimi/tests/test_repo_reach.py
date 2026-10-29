@@ -966,3 +966,13 @@ def test_num_turns_is_an_int_or_none(turns, expected):
     got = convert("claude-stream-json", raw)
     assert got.num_turns == expected
     assert any("num_turns" in e for e in got.errors) == (expected is None and turns is not None)
+
+
+@pytest.mark.parametrize("cost, expected", [(0.25, 0.25), (3, 3.0), ("abc", None), (True, None), (1e200, None),
+                                            (10**400, None), (None, None),
+                                            (float("nan"), None), (float("inf"), None), (-0.5, -0.5)])
+def test_total_cost_usd_is_a_usable_number_or_none(cost, expected):
+    raw = json.dumps({"type": "result", "result": "ok", "total_cost_usd": cost})
+    got = convert("claude-stream-json", raw)
+    assert got.cost_usd == expected
+    assert any("total_cost_usd" in e for e in got.errors) == (expected is None and cost is not None)

@@ -146,7 +146,8 @@ def cmd_arms_matrix_run(args: argparse.Namespace) -> None:
         except EmptyQuestionError:
             raise  # a bad input record, not a cell error: cli.main reports it (exit 2)
         except (ValueError, OSError, RecursionError) as exc:
-            print(f"Error running matrix cell {cell.name!r}: {exc}", file=sys.stderr)
+            saved = f" (finished cells are saved in {cells_dir})" if cell_artifacts else ""
+            print(f"Error running matrix cell {cell.name!r}: {exc}{saved}", file=sys.stderr)
             sys.exit(1)
         _save_arms_output(output, out_json, out_md)
         cell_artifacts.append((cell.name, out_json, output))

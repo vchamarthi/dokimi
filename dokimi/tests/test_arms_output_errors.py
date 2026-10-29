@@ -200,4 +200,35 @@ def test_matrix_run_exits_1_when_a_cell_cannot_read_its_inputs(tmp_path, monkeyp
     with pytest.raises(SystemExit) as exc:
         args.func(args)
     assert exc.value.code == 1
-    assert capsys.readouterr().err.startswith("Error running matrix cell 'c1':")
+    err = capsys.readouterr().err
+    assert err.startswith("Error running matrix cell 'c1':") and "finished cells are saved" not in err
+
+
+def test_matrix_run_names_the_dir_holding_the_cells_finished_before_a_failure(tmp_path, monkeypatch, capsys):
+    from dokimi.commands import arms
+
+    out_dir = tmp_path / "out"
+    args = _matrix_run(tmp_path, out_dir)
+    cell = {"model": "m", "provider": "anthropic", "harness": "arms-runner"}
+    Path(args.matrix_cells).write_text(json.dumps({"cells": [{"name": "c1", **cell}, {"name": "c2", **cell}]}),
+                                       encoding="utf-8")
+    calls = []
+
+    def build(cell_args, *a, **k):
+        calls.append(cell_args)
+        if len(calls) == 2:
+            raise PermissionError("denied")
+        return {}
+
+    def save(output, out_json, out_md):
+        out_json.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(arms, "_build_arms_output", build)
+    monkeypatch.setattr(arms, "_save_arms_output", save)
+    with pytest.raises(SystemExit) as exc:
+        args.func(args)
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Error running matrix cell 'c2':")
+    assert f"finished cells are saved in {out_dir / 'cells'}" in err
+    assert (out_dir / "cells" / "c1.json").exists()

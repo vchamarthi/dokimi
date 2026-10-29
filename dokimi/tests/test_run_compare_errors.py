@@ -40,6 +40,7 @@ def test_run_exits_2_on_a_bad_spec(tmp_path, monkeypatch, capsys, content):
     assert code == 2
     err = capsys.readouterr().err
     assert err.startswith("Error: ") and str(spec) in err
+    assert not (err.startswith(f"Error: {spec}: ") and str(spec) in err[len(f"Error: {spec}: "):])
     assert not (tmp_path / "o.json").exists() and not (tmp_path / "o.md").exists()
 
 

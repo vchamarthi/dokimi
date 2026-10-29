@@ -32,6 +32,8 @@ from datetime import datetime, timezone
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
+from .process_counts import as_measure
+
 TRACE_FORMATS = ("claude-stream-json", "text")
 OUTPUT_LIMIT = 8192
 OUTPUT_KEEP = 4096
@@ -144,6 +146,12 @@ def _set_num_turns(out: Transcript, turns: Any) -> None:
         out.errors.append(f"result num_turns {str(turns)[:50]!r} is not an integer; recorded as null")
 
 
+def _set_cost(out: Transcript, cost: Any) -> None:
+    out.cost_usd = as_measure(cost)
+    if out.cost_usd is None and cost is not None:
+        out.errors.append(f"result total_cost_usd {str(cost)[:50]!r} is not a usable number; recorded as null")
+
+
 def _apply(out: Transcript, rec: dict[str, Any], t: float | None,
            by_id: dict[str, dict[str, Any]], workdir: str | None) -> None:
     kind = rec.get("type")
@@ -174,7 +182,7 @@ def _apply(out: Transcript, rec: dict[str, Any], t: float | None,
                 _apply_result(block, by_id)
     elif kind == "result":
         out.answer = str(rec.get("result") or "").strip()
-        out.cost_usd = rec.get("total_cost_usd")
+        _set_cost(out, rec.get("total_cost_usd"))
         out.result_seen = True
         _set_num_turns(out, rec.get("num_turns"))
         out.is_error = bool(rec.get("is_error"))

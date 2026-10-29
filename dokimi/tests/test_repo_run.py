@@ -902,10 +902,11 @@ def test_a_task_json_the_pin_cannot_read_pins_the_graders_and_a_non_object_one_d
     assert ("graders" in json.loads((setup["out"] / "b1/_eval/batch.json").read_text())) is pinned
 
 
-@pytest.mark.parametrize("text", ["{", "[]", '"pin"', pytest.param("[" * 100000, id="deep")])
-def test_a_batch_whose_pin_is_unreadable_exits_1_naming_the_file(setup, capsys, text):
+@pytest.mark.parametrize("content", [b"{", b"[]", b'"pin"', b"", b"\xff\xfe", b"[" * 100000],
+                         ids=["truncated", "list", "string", "empty", "not-utf8", "deep"])
+def test_a_batch_whose_pin_is_unreadable_exits_1_naming_the_file(setup, capsys, content):
     _run(setup, "--arm", "guidance:raw", "--task", "fix_add")
-    (setup["out"] / "b1/_eval/batch.json").write_text(text)
+    (setup["out"] / "b1/_eval/batch.json").write_bytes(content)
     capsys.readouterr()
     with pytest.raises(SystemExit) as exc:
         _run(setup, "--arm", "guidance:none", "--task", "fix_add")

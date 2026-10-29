@@ -11,6 +11,7 @@ import math
 import sys
 from pathlib import Path
 
+from dokimi.commands._output import exit_on_unwritable
 from dokimi.report.json_report import write_json
 from dokimi.report.markdown_report import write_compare_report, write_run_report
 from dokimi.runner.compare import CompareInputError, compare_snapshots
@@ -26,7 +27,8 @@ def _run_or_exit(root: Path, spec_path: Path) -> dict:
     try:
         load_benchmark_spec(spec_path)  # fail on a spec that cannot be read, parsed or validated, before the run
     except (RuntimeError, ValueError) as exc:
-        print(f"Error: {spec_path}: {exc}", file=sys.stderr)
+        named = str(spec_path) in str(exc)  # load_spec names the file already
+        print(f"Error: {exc}" if named else f"Error: {spec_path}: {exc}", file=sys.stderr)
         sys.exit(2)
     try:
         return run_benchmark(root, spec_path)
@@ -41,11 +43,8 @@ def _run_or_exit(root: Path, spec_path: Path) -> dict:
 def _write_outputs(writes) -> None:
     """Run each (writer, data, path); an unwritable path exits 1 naming it."""
     for writer, data, path in writes:
-        try:
+        with exit_on_unwritable(path):
             writer(data, path)
-        except OSError as exc:
-            print(f"Error: cannot write {path}: {exc}", file=sys.stderr)
-            sys.exit(1)
 
 
 def cmd_run(args: argparse.Namespace) -> None:
