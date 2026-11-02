@@ -211,6 +211,29 @@ def test_symlinked_root_is_an_unusable_invocation(tmp_path):
         evaluate(link)
 
 
+def test_linked_ancestor_of_the_root_is_resolved_not_refused(tmp_path):
+    skill(tmp_path / "actual" / "catalog")
+    (tmp_path / "linked").symlink_to(tmp_path / "actual", target_is_directory=True)
+    report = evaluate(tmp_path / "linked" / "catalog")
+    assert report["status"] == "pass"
+    assert report["root"] == str((tmp_path / "actual" / "catalog").resolve())
+
+
+def test_catalog_path_entry_without_a_name_loads_like_catalog_scan(tmp_path):
+    skill(tmp_path)
+    (tmp_path / "skills.yaml").write_text("skills:\n  - catalog_path: skills/alpha\n", encoding="utf-8")
+    report = evaluate(tmp_path)
+    assert report["status"] == "pass"
+    assert row(report)["path"] == "skills/alpha"
+
+
+@pytest.mark.parametrize("contents", ["", "skills:\n", "[]\n"])
+def test_empty_manifest_is_an_empty_catalog_not_an_input_error(tmp_path, contents):
+    (tmp_path / "skills.yaml").write_text(contents, encoding="utf-8")
+    report = evaluate(tmp_path)
+    assert codes(report) == {"empty-catalog"}
+
+
 @pytest.mark.parametrize("file,contents", [
     ("skills.yaml", "skills: ["),
     ("evaluation/harbor/suites.json", "["),

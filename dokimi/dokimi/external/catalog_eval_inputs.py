@@ -30,12 +30,11 @@ def relative_path(value: object) -> str:
 
 
 def checked_root(root: Path) -> Path:
-    """Refuse linked roots and linked ancestors before resolving the input."""
+    """Refuse a linked root; linked ancestors resolve once and everything below is checked."""
     candidate = Path(root).absolute()
     try:
-        for part in (candidate, *candidate.parents):
-            if part.is_symlink():
-                raise ValueError(f"catalog root contains a symlink: {part}")
+        if candidate.is_symlink():
+            raise ValueError(f"catalog root is a symlink: {candidate}")
         if not candidate.is_dir():
             raise ValueError(f"catalog root is not a directory: {candidate}")
         return candidate.resolve(strict=True)

@@ -204,3 +204,11 @@ def test_duplicate_skill_validation_has_complete_failure_receipts(tmp_path):
     assert report["status"] == "fail"
     assert completeness(plan, result).complete
     assert {cell["status"] for cell in result["cells"]} == {"fail"}
+
+
+def test_report_lists_each_finding_once(tmp_path):
+    root = _catalog(tmp_path)
+    (root / "skills.yaml").write_text("- name: alpha\n- name: alpha\n", encoding="utf-8")
+    out = tmp_path / "out"
+    assert _run(root, out).returncode == 1
+    assert (out / "report.md").read_text().count("duplicate-skill") == 1

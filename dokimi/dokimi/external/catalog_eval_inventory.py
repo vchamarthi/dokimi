@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
@@ -34,9 +34,9 @@ def _skill_specs(inputs: Inputs) -> list[dict]:
                 for file in inputs.files(inputs.root)
                 if file.name == "SKILL.md"
                 and not TEMPLATE_DIR_NAMES.intersection(file.relative_to(inputs.root).parts[:-1])]
-    data = _yaml(inputs, path)
+    data = _yaml(inputs, path) or {}
     if isinstance(data, dict):
-        data = data.get("skills", [])
+        data = data.get("skills") or []
     if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
         raise ValueError(f"invalid skills list at {path}")
     return data
@@ -44,10 +44,10 @@ def _skill_specs(inputs: Inputs) -> list[dict]:
 
 def _skill_path(item: dict) -> str:
     name = item.get("name")
+    if item.get("catalog_path"):
+        return relative_path(item["catalog_path"])
     if not isinstance(name, str) or not name.strip():
         raise UnsafePath(f"skill name must be a nonempty string: {name!r}")
-    if "catalog_path" in item:
-        return relative_path(item["catalog_path"])
     if relative_path(name) != name or "/" in name or name == ".":
         raise UnsafePath(f"skill name is not a directory name: {name!r}")
     return f"skills/{name}"
@@ -68,7 +68,7 @@ def _imported(item: dict, problems: list[dict]) -> bool:
 
 
 def _row(item: dict, path: str, bundle: str | None, findings: list[dict]) -> dict:
-    return {"name": str(item.get("name", "?")), "path": path, "bundle_digest": bundle,
+    return {"name": str(item.get("name") or PurePosixPath(path).name or "?"), "path": path, "bundle_digest": bundle,
             "checks": {"status": "pass", "findings": findings}, "evaluation": "no_tasks",
             "evaluated_here": True, "tasks": [], "planned_tasks": []}
 

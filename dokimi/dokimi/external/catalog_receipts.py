@@ -63,8 +63,10 @@ def render(report: dict[str, Any]) -> str:
     for row in report["skills"]:
         lines.append(f"| {_text(row['name'])} | {row['name'] in selected} | {row['checks']['status']} | "
                      f"{row['evaluation']} | {len(row['tasks'])} |")
+    per_skill = [item for row in report["skills"] for item in row["checks"]["findings"]]
     for finding in report["problems"]:
-        lines.extend(["", f"- {_text(finding['code'])}: {_text(finding['message'])}"])
+        if finding not in per_skill:
+            lines.extend(["", f"- {_text(finding['code'])}: {_text(finding['message'])}"])
     for row in report["skills"]:
         for finding in row["checks"]["findings"]:
             lines.extend(["", f"- {_text(row['name'])}: {_text(finding['code'])}: {_text(finding['message'])}"])
