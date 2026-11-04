@@ -489,3 +489,35 @@ jobs:
       # test_runs_scan.py holds the only junction test of the runs-root containment; it runs on Windows only.
       - name: Run a few fast tests
         run: pytest -q tests/test_cli_help.py tests/test_console_encoding.py tests/test_runs_scan.py tests/test_runs_show.py
+
+  local-parity:
+    name: Local CI parity (Linux and Docker)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9  # v7
+        with:
+          version: '0.11.26'
+          enable-cache: false
+      - name: Pin the upstream comparison base
+        run: |
+          git remote add upstream https://github.com/intel/dokimi.git
+          git fetch --no-tags upstream 8d54c931f19aafd0e13e58fae94f0f142566d4ad:refs/remotes/upstream/main
+          git merge-base --is-ancestor refs/remotes/upstream/main HEAD
+      - name: Bootstrap the local CI environment
+        run: make dev
+      - name: Run every local PR check with Docker
+        run: make ci-local CI_LOCAL_ARGS='--with-docker --remote upstream'

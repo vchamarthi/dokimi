@@ -628,3 +628,31 @@ def test_native_gitleaks_at_another_version_is_unsupported_and_keeps_other_check
     assert [call["cmd"][-1] for call in env["calls"]] == ["echo lint"]
     out = capsys.readouterr().out
     assert "unsupported host" in out and other in out
+
+
+def test_manual_local_parity_job_is_skipped_without_recursive_execution(env, capsys):
+    workflow = cl.yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text())
+    parity = workflow["jobs"]["local-parity"]
+    (cl.WORKFLOWS / "x.yml").write_text(cl.yaml.safe_dump({"on": "pull_request", "jobs": {"local-parity": parity}}))
+    assert cl.run(ns(jobs="local-parity", with_docker=True)) == 0
+    assert env["calls"] == []
+    assert "local-parity: skip (job condition false on a PR)" in capsys.readouterr().out
+
+
+def test_manual_local_parity_job_uses_pinned_tools_and_upstream_comparison():
+    workflow = cl.yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text())
+    job = workflow["jobs"]["local-parity"]
+    assert job["if"] == "github.event_name == 'workflow_dispatch'"
+    assert job["runs-on"] == "ubuntu-24.04" and job["timeout-minutes"] == 30
+    assert job["permissions"] == {"contents": "read"}
+    assert "secrets." not in str(job)
+    checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"] == {"persist-credentials": False, "fetch-depth": 0}
+    for step in job["steps"]:
+        if "uses" in step:
+            assert re.fullmatch(r"[\w/-]+@[0-9a-f]{40}", step["uses"])
+    scripts = "\n".join(s.get("run", "") for s in job["steps"])
+    assert "https://github.com/intel/dokimi.git" in scripts
+    assert "refs/remotes/upstream/main" in scripts
+    assert "make dev" in scripts
+    assert "make ci-local CI_LOCAL_ARGS='--with-docker --remote upstream'" in scripts
