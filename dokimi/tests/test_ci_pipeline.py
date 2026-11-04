@@ -260,6 +260,54 @@ def test_cli_live_gate_and_record_follow_measured_answers(catalog: Path, tmp_pat
         record.func(record)
     assert promoted.value.code == (2 if regression else 0)
     assert bool(list(store.glob("*/*/current.json"))) is (not regression)
+    capsys.readouterr()
+    _gate_and_report(out, regression, capsys)
+    if not regression:
+        _revalidate_new_model(catalog, tmp_path, store, fake_llm, capsys)
+
+
+def _gate_and_report(out: Path, regression: bool, capsys) -> None:
+    from dokimi.cli import parse_args
+
+    gate = parse_args(["ci", "gate", str(out / "run.json"), "--out", str(out / "recomputed.json")])
+    with pytest.raises(SystemExit) as gated:
+        gate.func(gate)
+    assert gated.value.code == int(regression)
+    assert json.loads((out / "recomputed.json").read_text())["status"] == ("fail" if regression else "pass")
+    capsys.readouterr()
+    report = parse_args(["ci", "report", str(out / "run.json"), "--out", str(out / "rendered.md")])
+    report.func(report)
+    assert ("FAIL" if regression else "PASS") in (out / "rendered.md").read_text()
+
+
+def _revalidate_new_model(catalog: Path, tmp_path: Path, store: Path, fake_llm, capsys) -> None:
+    from dokimi.cli import parse_args
+    from dokimi.llm import Reply
+    from dokimi.runner.ci_source import revision
+
+    original = next(store.glob("*/*/current.json"))
+    old_receipt = original.read_bytes()
+    for arm in ("none", "approved", "candidate"):
+        for _ in range(3):
+            fake_llm.push(Reply(text="fresh answer", model_id="gpt-4.1-mini", usage=fake_llm.usage),
+                          Reply(text="No" if arm == "none" else "Yes", model_id="gpt-4o", usage=fake_llm.usage),
+                          Reply(text="Yes" if arm == "none" else "No", model_id="gpt-4o", usage=fake_llm.usage))
+    out = tmp_path / "revalidated"
+    args = parse_args(["ci", "revalidate", str(catalog), "--baseline", str(original), "--out-dir", str(out),
+                       "--max-usd", "1", "--model", "gpt-4.1-mini", "--provider", "openai", "--reps", "1",
+                       "--judge-model", "gpt-4o", "--judge-provider", "openai"])
+    with pytest.raises(SystemExit) as measured:
+        args.func(args)
+    assert measured.value.code == 0
+    assert json.loads((out / "run.json").read_text())["identity"]["model"] == "gpt-4.1-mini"
+    record = parse_args(["ci", "record", str(out / "run.json"), "--root", str(catalog), "--store", str(store),
+                         "--expect-previous", "none", "--expected-head", revision(catalog)])
+    with pytest.raises(SystemExit) as recorded:
+        record.func(record)
+    assert recorded.value.code == 0
+    assert len(list(store.glob("*/*/current.json"))) == 2
+    assert original.read_bytes() == old_receipt
+    capsys.readouterr()
 
 
 def test_report_values_cannot_render_remote_images_or_links():
