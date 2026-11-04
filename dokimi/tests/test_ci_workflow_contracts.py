@@ -76,3 +76,17 @@ def test_paid_candidate_imports_base_before_credentials() -> None:
     assert "secrets." not in str(imported)
     assert "core.hooksPath=/dev/null" in imported["run"]
     assert "--no-recurse-submodules" in imported["run"]
+
+
+def test_subscription_jobs_prefer_the_named_protected_environment_secret() -> None:
+    for name, job_id, step_name in (("pr", "run", "Run approved comparison"),
+                                   ("revalidate", "revalidate", "Revalidate without promotion")):
+        workflow = _wf(name)
+        declared = workflow["on"]["workflow_call"]["secrets"]
+        assert declared["DOKIMI_CLAUDE_CODE_OAUTH_TOKEN"]["required"] is False
+        job = workflow["jobs"][job_id]
+        assert job["environment"] == "${{ inputs.environment }}"
+        runtime = next(s for s in job["steps"] if s.get("name") == step_name)
+        assert runtime["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == (
+            "${{ secrets.DOKIMI_CLAUDE_CODE_OAUTH_TOKEN || secrets.claude-code-oauth-token }}")
+    assert "secrets." not in str(_wf("pr")["jobs"]["check"])
