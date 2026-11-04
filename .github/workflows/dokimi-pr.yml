@@ -339,6 +339,7 @@ jobs:
       shell: bash
       run: |
         npm install --global --ignore-scripts @anthropic-ai/claude-code@2.1.306
+        node "$(npm root --global)/@anthropic-ai/claude-code/install.cjs"
         claude --version
     - name: Run approved comparison
       uses: ./.dokimi-action
