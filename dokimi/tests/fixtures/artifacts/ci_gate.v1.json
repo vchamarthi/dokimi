@@ -1,0 +1,99 @@
+{
+  "schema_version": "ci_gate.v1",
+  "status": "pass",
+  "exit_code": 0,
+  "scope": "behavioral",
+  "reason": "complete paired evidence satisfies policy",
+  "reasons": [
+    "complete paired evidence satisfies policy"
+  ],
+  "promotion_eligible": true,
+  "task_effects": [
+    {
+      "task": "task-0",
+      "reps": 1,
+      "scores": {
+        "none": 0.2,
+        "approved": 0.7,
+        "candidate": 0.8
+      },
+      "lift": 0.6000000000000001,
+      "regression": 0.10000000000000009
+    },
+    {
+      "task": "task-1",
+      "reps": 1,
+      "scores": {
+        "none": 0.2,
+        "approved": 0.7,
+        "candidate": 0.8
+      },
+      "lift": 0.6000000000000001,
+      "regression": 0.10000000000000009
+    },
+    {
+      "task": "task-2",
+      "reps": 1,
+      "scores": {
+        "none": 0.2,
+        "approved": 0.7,
+        "candidate": 0.8
+      },
+      "lift": 0.6000000000000001,
+      "regression": 0.10000000000000009
+    },
+    {
+      "task": "task-3",
+      "reps": 1,
+      "scores": {
+        "none": 0.2,
+        "approved": 0.7,
+        "candidate": 0.8
+      },
+      "lift": 0.6000000000000001,
+      "regression": 0.10000000000000009
+    },
+    {
+      "task": "task-4",
+      "reps": 1,
+      "scores": {
+        "none": 0.2,
+        "approved": 0.7,
+        "candidate": 0.8
+      },
+      "lift": 0.6000000000000001,
+      "regression": 0.10000000000000009
+    },
+    {
+      "task": "task-5",
+      "reps": 1,
+      "scores": {
+        "none": 0.2,
+        "approved": 0.7,
+        "candidate": 0.8
+      },
+      "lift": 0.6000000000000001,
+      "regression": 0.10000000000000009
+    }
+  ],
+  "summary": {
+    "n_tasks": 6,
+    "comparison": "candidate-vs-approved",
+    "lift": {
+      "mean": 0.6000000000000001,
+      "lo": 0.6000000000000001,
+      "hi": 0.6000000000000001,
+      "n": 6,
+      "method": "percentile_bootstrap"
+    },
+    "regression": {
+      "mean": 0.10000000000000009,
+      "lo": 0.10000000000000009,
+      "hi": 0.10000000000000009,
+      "n": 6,
+      "method": "percentile_bootstrap"
+    },
+    "uncertainty_unit": "task",
+    "confidence": 0.95
+  }
+}

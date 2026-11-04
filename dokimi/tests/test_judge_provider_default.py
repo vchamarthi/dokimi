@@ -19,12 +19,13 @@ from dokimi.defaults import (
 
 
 def _judge_commands() -> dict[str, list[str]]:
-    """Every subcommand with ``--judge-provider`` but novelty -> argv with its required args."""
+    """Commands with an optional judge model -> argv with their required args."""
     found: dict[str, list[str]] = {}
 
     def walk(parser: argparse.ArgumentParser, path: list[str]) -> None:
         dests = {a.dest for a in parser._actions}
-        if "judge_provider" in dests and path[0] != "novelty":
+        optional_judge = any(a.dest == "judge_model" and not a.required for a in parser._actions)
+        if "judge_provider" in dests and path[0] != "novelty" and optional_judge:
             argv = list(path)
             for action in parser._actions:
                 if action.required:

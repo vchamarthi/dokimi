@@ -1,0 +1,370 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: dokimi-pr
+'on':
+  workflow_call:
+    inputs:
+      dokimi-ref:
+        description: Pinned trusted engine commit or release tag
+        required: true
+        type: string
+      dokimi-repository:
+        description: Engine/action repository
+        required: false
+        type: string
+        default: intel/dokimi
+      mode:
+        description: check is free; run requires a trusted workflow_dispatch controller
+        required: false
+        type: string
+        default: check
+      subject-kind:
+        description: catalog or repo
+        required: false
+        type: string
+        default: catalog
+      config:
+        description: Relative configuration path read from approved base
+        required: false
+        type: string
+        default: ''
+      policy:
+        description: Relative trusted policy path read from approved base
+        required: false
+        type: string
+        default: ''
+      pr-number:
+        description: Exact approved PR number
+        required: false
+        type: number
+        default: 0
+      expected-head:
+        description: Approved candidate head commit
+        required: false
+        type: string
+        default: ''
+      expected-base:
+        description: Approved base commit
+        required: false
+        type: string
+        default: ''
+      environment:
+        description: Required protected environment for paid run
+        required: false
+        type: string
+        default: ''
+      max-usd:
+        description: Explicit paid budget
+        required: false
+        type: string
+        default: '0'
+      model:
+        description: Measured model
+        required: false
+        type: string
+        default: ''
+      provider:
+        description: Provider
+        required: false
+        type: string
+        default: ''
+      judge-model:
+        description: Independent judge
+        required: false
+        type: string
+        default: ''
+      judge-provider:
+        description: Judge provider
+        required: false
+        type: string
+        default: ''
+      reps:
+        description: Repetitions
+        required: false
+        type: number
+        default: 3
+      subject:
+        description: Declared subject ID
+        required: false
+        type: string
+        default: ''
+      harness:
+        description: Harness
+        required: false
+        type: string
+        default: arms-runner
+      max-calls:
+        description: Finite maximum model calls; required for Claude subscription billing
+        required: false
+        type: number
+        default: 0
+    secrets:
+      openai-api-key:
+        description: Optional OpenAI credential; required when that provider is selected
+        required: false
+      anthropic-api-key:
+        description: Optional Anthropic credential
+        required: false
+      claude-code-oauth-token:
+        description: Explicit hosted Claude subscription OAuth token; local credentials are never uploaded by this
+          workflow
+        required: false
+permissions: {}
+jobs:
+  validate:
+    name: Validate requested mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+    - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      env:
+        MODE: ${{ inputs.mode }}
+      with:
+        script: |
+          if (!['check','run'].includes(process.env.MODE)) throw new Error('mode must be check or run');
+          if (process.env.MODE === 'run' && context.eventName !== 'workflow_dispatch') throw new Error('Paid work requires explicit trusted dispatch');
+  check:
+    name: dokimi-static
+    if: ${{ inputs.mode == 'check' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+    - name: Resolve dokimi-ref
+      id: engine
+      shell: bash
+      env:
+        REF: ${{ inputs.dokimi-ref }}
+        DOKIMI_REPO: ${{ inputs.dokimi-repository }}
+      run: |
+        if ! [[ "$DOKIMI_REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]]; then
+          echo "::error title=dokimi-repository::dokimi-repository is not owner/name"
+          exit 1
+        fi
+        if [[ "$REF" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+          sha=${REF,,}
+        elif [[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/+-]*$ ]]; then
+          # An annotated tag's commit is its peeled (^{}) line.
+          sha=$(git ls-remote --tags "https://github.com/$DOKIMI_REPO" \
+                | awk -v t="refs/tags/$REF" '$2 == t "^{}" { p = $1 } $2 == t { l = $1 } END { print (p != "" ? p : l) }')
+        fi
+        if ! [[ "${sha:-}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error title=dokimi-ref::dokimi-ref is neither a 40-digit commit SHA nor a tag of $DOKIMI_REPO"
+          exit 1
+        fi
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "dokimi $DOKIMI_REPO@$REF -> $sha"
+    - name: Check out pinned engine actions
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ inputs.dokimi-repository }}
+        ref: ${{ steps.engine.outputs.sha }}
+        path: .dokimi-action
+        persist-credentials: false
+        sparse-checkout: |-
+          actions
+          action.yml
+        sparse-checkout-cone-mode: false
+    - name: Install pinned engine
+      id: setup
+      uses: ./.dokimi-action/actions/setup
+      with:
+        dokimi-repository: ${{ inputs.dokimi-repository }}
+        dokimi-ref: ${{ steps.engine.outputs.sha }}
+        out-dir: ${{ runner.temp }}/dokimi-out
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ github.sha }}
+        path: candidate
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Check out approved base policy
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.expected-base
+          || github.event.before }}
+        path: base
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Run free content checks
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        ROOT: ${{ github.workspace }}/candidate
+        BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.expected-base
+          || github.event.before }}
+        HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        REPO: ${{ github.repository }}
+        OUT: ${{ runner.temp }}/dokimi-out
+        KIND: ${{ inputs.subject-kind }}
+        CONFIG: ${{ inputs.config }}
+        POLICY: ${{ inputs.policy }}
+        BASE_ROOT: ${{ github.workspace }}/base
+      run: |
+        args=(ci check "$ROOT" --base-root "$BASE_ROOT" --changed-from "$BASE" --out-dir "$OUT" --subject-kind "$KIND" --expected-head "$HEAD" --expected-base "$BASE" --source-repository "$REPO")
+        [[ -z "$CONFIG" ]] || args+=(--config "$ROOT/$CONFIG")
+        [[ -z "$POLICY" ]] || args+=(--policy "$ROOT/$POLICY")
+        dokimi "${args[@]}"
+    - name: Append report
+      if: ${{ always() }}
+      shell: bash
+      env:
+        REPORT: ${{ runner.temp }}/dokimi-out/report.md
+      run: |
+        if [[ -f "$REPORT" ]]; then cat -- "$REPORT" >> "$GITHUB_STEP_SUMMARY"; fi
+    - name: Upload run JSON only
+      if: ${{ always() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: dokimi-run-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/dokimi-out/run.json
+        if-no-files-found: warn
+        retention-days: 7
+    needs: validate
+  run:
+    name: dokimi-model (informational)
+    if: ${{ inputs.mode == 'run' && github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - name: Validate exact approved candidate
+      id: candidate
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      env:
+        HEAD: ${{ inputs.expected-head }}
+        BASE: ${{ inputs.expected-base }}
+        PR: ${{ inputs.pr-number }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        CONFIG: ${{ inputs.config }}
+        POLICY: ${{ inputs.policy }}
+        HARNESS: ${{ inputs.harness }}
+        SUBJECT_KIND: ${{ inputs.subject-kind }}
+      with:
+        script: |
+          if (process.env.HARNESS !== 'arms-runner' || process.env.SUBJECT_KIND !== 'catalog') throw new Error('Hosted paid runs support only catalog arms-runner; use an isolated direct CLI worker for executable repositories');
+          const {owner,repo}=context.repo;
+          const sha=v=>/^[0-9a-f]{40}$/.test(v || '');
+          if (!sha(process.env.HEAD) || !sha(process.env.BASE) || !process.env.ENVIRONMENT) throw new Error('Explicit head/base and protected environment required');
+          if (context.ref !== `refs/heads/${context.payload.repository.default_branch}`) throw new Error('Paid controller must run from default branch');
+          const n=Number(process.env.PR);
+          if (!Number.isSafeInteger(n) || n<=0) throw new Error('PR required');
+          const {data:pr}=await github.rest.pulls.get({owner,repo,pull_number:n});
+          if (pr.state!=='open' || pr.head.sha!==process.env.HEAD || pr.base.sha!==process.env.BASE || pr.base.repo.full_name!==`${owner}/${repo}`) throw new Error('Stale or foreign candidate');
+          for (const path of [process.env.CONFIG,process.env.POLICY]) {
+           if (path && (path.startsWith('/') || path.split(/[\\/]/).includes('..'))) throw new Error('Trusted paths must be relative to base');
+          }
+          if (!process.env.POLICY) throw new Error('Explicit base policy required');
+          core.setOutput('head-repository',pr.head.repo.full_name);
+    - name: Resolve dokimi-ref
+      id: engine
+      shell: bash
+      env:
+        REF: ${{ inputs.dokimi-ref }}
+        DOKIMI_REPO: ${{ inputs.dokimi-repository }}
+      run: |
+        if ! [[ "$DOKIMI_REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]]; then
+          echo "::error title=dokimi-repository::dokimi-repository is not owner/name"
+          exit 1
+        fi
+        if [[ "$REF" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+          sha=${REF,,}
+        elif [[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/+-]*$ ]]; then
+          # An annotated tag's commit is its peeled (^{}) line.
+          sha=$(git ls-remote --tags "https://github.com/$DOKIMI_REPO" \
+                | awk -v t="refs/tags/$REF" '$2 == t "^{}" { p = $1 } $2 == t { l = $1 } END { print (p != "" ? p : l) }')
+        fi
+        if ! [[ "${sha:-}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error title=dokimi-ref::dokimi-ref is neither a 40-digit commit SHA nor a tag of $DOKIMI_REPO"
+          exit 1
+        fi
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "dokimi $DOKIMI_REPO@$REF -> $sha"
+    - name: Check out pinned engine actions
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ inputs.dokimi-repository }}
+        ref: ${{ steps.engine.outputs.sha }}
+        path: .dokimi-action
+        persist-credentials: false
+        sparse-checkout: |-
+          actions
+          action.yml
+        sparse-checkout-cone-mode: false
+    - name: Install pinned engine
+      id: setup
+      uses: ./.dokimi-action/actions/setup
+      with:
+        dokimi-repository: ${{ inputs.dokimi-repository }}
+        dokimi-ref: ${{ steps.engine.outputs.sha }}
+        out-dir: ${{ runner.temp }}/dokimi-out
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ steps.candidate.outputs.head-repository }}
+        ref: ${{ inputs.expected-head }}
+        path: candidate
+        persist-credentials: false
+        fetch-depth: 0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ inputs.expected-base }}
+        path: base
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Install pinned Claude subscription CLI
+      if: ${{ inputs.provider == 'claude-cli' || inputs.judge-provider == 'claude-cli' }}
+      shell: bash
+      run: |
+        npm install --global --ignore-scripts @anthropic-ai/claude-code@2.1.306
+        claude --version
+    - name: Run approved comparison
+      uses: ./.dokimi-action
+      env:
+        OPENAI_API_KEY: ${{ secrets.openai-api-key }}
+        ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.claude-code-oauth-token }}
+      with:
+        mode: run
+        root: ${{ github.workspace }}/candidate
+        base-root: ${{ github.workspace }}/base
+        out-dir: ${{ runner.temp }}/dokimi-out
+        max-usd: ${{ inputs.max-usd }}
+        model: ${{ inputs.model }}
+        provider: ${{ inputs.provider }}
+        judge-model: ${{ inputs.judge-model }}
+        judge-provider: ${{ inputs.judge-provider }}
+        reps: ${{ inputs.reps }}
+        subject: ${{ inputs.subject }}
+        harness: ${{ inputs.harness }}
+        config: ${{ inputs.config != '' && format('{0}/base/{1}', github.workspace, inputs.config) || '' }}
+        policy: ${{ github.workspace }}/base/${{ inputs.policy }}
+        expected-head: ${{ inputs.expected-head }}
+        expected-base: ${{ inputs.expected-base }}
+        source-repository: ${{ github.repository }}
+        subject-kind: ${{ inputs.subject-kind }}
+        max-calls: ${{ inputs.max-calls }}
+    - name: Append report
+      if: ${{ always() }}
+      shell: bash
+      env:
+        REPORT: ${{ runner.temp }}/dokimi-out/report.md
+      run: |
+        if [[ -f "$REPORT" ]]; then cat -- "$REPORT" >> "$GITHUB_STEP_SUMMARY"; fi
+    - name: Upload run JSON only
+      if: ${{ always() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: dokimi-run-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/dokimi-out/run.json
+        if-no-files-found: warn
+        retention-days: 7
+    needs: validate

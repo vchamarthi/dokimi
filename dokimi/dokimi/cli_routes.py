@@ -56,6 +56,7 @@ class Tombstone:
 
 
 ROOTS: tuple[Root, ...] = (
+    Root("ci", "The loop"),
     Root("evaluate", "The loop"),
     Root("baseline", "The loop"),
     Root("report", "The loop"),
@@ -83,6 +84,12 @@ ROOTS: tuple[Root, ...] = (
 )
 
 LEAVES: tuple[Leaf, ...] = (
+    Leaf(("ci", "check"), FREE),
+    Leaf(("ci", "run"), PAID),
+    Leaf(("ci", "gate"), FREE),
+    Leaf(("ci", "report"), FREE),
+    Leaf(("ci", "record"), FREE),
+    Leaf(("ci", "revalidate"), PAID),
     Leaf(("evaluate",), PAID),
     Leaf(("baseline", "save"), FREE),
     Leaf(("baseline", "list"), FREE),

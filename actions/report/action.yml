@@ -1,0 +1,29 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: Dokimi report
+description: Render a validated run artifact with the installed trusted engine.
+inputs:
+  run-file:
+    description: Run JSON path
+    required: true
+  out:
+    description: Markdown output path
+    required: true
+  policy:
+    description: Trusted policy used for the run; empty uses engine defaults
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+  - shell: bash
+    env:
+      RUN_FILE: ${{ inputs.run-file }}
+      OUT: ${{ inputs.out }}
+      POLICY: ${{ inputs.policy }}
+    run: |
+      args=(ci report "$RUN_FILE" --out "$OUT")
+      [[ -z "$POLICY" ]] || args+=(--policy "$POLICY")
+      dokimi "${args[@]}"
+      cat -- "$OUT" >> "$GITHUB_STEP_SUMMARY"

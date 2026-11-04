@@ -109,6 +109,7 @@ nav:
       - what-it-measures.md
       - reviewing.md
       - external-content.md
+      - ci-integration.md
       - quickstart.md
       - runs.md
       - user-flow.md

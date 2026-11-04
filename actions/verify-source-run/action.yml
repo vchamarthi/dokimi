@@ -1,0 +1,57 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: Verify Dokimi source run
+description: Verify GitHub metadata and extract size-capped schema-validated JSON. No candidate code execution.
+inputs:
+  source-run:
+    description: Exact source run ID
+    required: true
+    default: ''
+  source-attempt:
+    description: Exact run attempt
+    required: true
+    default: ''
+  source-workflow:
+    description: Allowed workflow path
+    required: true
+    default: ''
+  controller-sha:
+    description: Pinned approved paid controller SHA
+    required: false
+    default: ''
+  policy-digest:
+    description: Trusted policy digest
+    required: true
+    default: ''
+  out:
+    description: Absolute destination for verified run JSON
+    required: true
+    default: ''
+  allow-merged:
+    description: Require merged PR instead of open PR
+    required: false
+    default: 'false'
+outputs:
+  merged-sha:
+    description: Merged commit verified through GitHub
+    value: ${{ steps.verify.outputs.merged-sha }}
+  head-sha:
+    description: Original measured head
+    value: ${{ steps.verify.outputs.head-sha }}
+runs:
+  using: composite
+  steps:
+  - id: verify
+    uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+    env:
+      VERIFIER: ${{ github.action_path }}/index.cjs
+      SOURCE_RUN: ${{ inputs.source-run }}
+      SOURCE_ATTEMPT: ${{ inputs.source-attempt }}
+      SOURCE_WORKFLOW: ${{ inputs.source-workflow }}
+      CONTROLLER_SHA: ${{ inputs.controller-sha }}
+      EXPECTED_POLICY: ${{ inputs.policy-digest }}
+      VERIFIED_OUT: ${{ inputs.out }}
+      ALLOW_MERGED: ${{ inputs.allow-merged }}
+    with:
+      script: await require(process.env.VERIFIER)(github, context, core);

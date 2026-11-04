@@ -1,0 +1,179 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: dokimi-record
+'on':
+  workflow_call:
+    inputs:
+      dokimi-ref:
+        description: Pinned trusted engine commit or release tag
+        required: true
+        type: string
+      dokimi-repository:
+        description: Engine/action repository
+        required: false
+        type: string
+        default: intel/dokimi
+      source-run:
+        description: Approved paid result source run
+        required: true
+        type: string
+      source-attempt:
+        description: Exact run attempt
+        required: true
+        type: string
+      source-workflow:
+        description: Allowed source workflow path
+        required: true
+        type: string
+      controller-sha:
+        description: Pinned approved controller commit
+        required: true
+        type: string
+      policy-digest:
+        description: Trusted policy digest
+        required: true
+        type: string
+      expect-previous:
+        description: Expected compact baseline record digest; empty for first record
+        required: false
+        type: string
+        default: none
+      policy:
+        description: Merged relative policy path
+        required: true
+        type: string
+      commit-author:
+        description: DCO sign-off author name for baseline commits
+        type: string
+        default: github-actions[bot]
+        required: false
+      commit-email:
+        description: DCO author email
+        type: string
+        default: 41898282+github-actions[bot]@users.noreply.github.com
+        required: false
+permissions: {}
+concurrency:
+  group: dokimi-record-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  record:
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+    steps:
+    - name: Resolve dokimi-ref
+      id: engine
+      shell: bash
+      env:
+        REF: ${{ inputs.dokimi-ref }}
+        DOKIMI_REPO: ${{ inputs.dokimi-repository }}
+      run: |
+        if ! [[ "$DOKIMI_REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]]; then
+          echo "::error title=dokimi-repository::dokimi-repository is not owner/name"
+          exit 1
+        fi
+        if [[ "$REF" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+          sha=${REF,,}
+        elif [[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/+-]*$ ]]; then
+          # An annotated tag's commit is its peeled (^{}) line.
+          sha=$(git ls-remote --tags "https://github.com/$DOKIMI_REPO" \
+                | awk -v t="refs/tags/$REF" '$2 == t "^{}" { p = $1 } $2 == t { l = $1 } END { print (p != "" ? p : l) }')
+        fi
+        if ! [[ "${sha:-}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error title=dokimi-ref::dokimi-ref is neither a 40-digit commit SHA nor a tag of $DOKIMI_REPO"
+          exit 1
+        fi
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "dokimi $DOKIMI_REPO@$REF -> $sha"
+    - name: Check out pinned engine actions
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ inputs.dokimi-repository }}
+        ref: ${{ steps.engine.outputs.sha }}
+        path: .dokimi-action
+        persist-credentials: false
+        sparse-checkout: |-
+          actions
+          action.yml
+        sparse-checkout-cone-mode: false
+    - name: Install pinned engine
+      id: setup
+      uses: ./.dokimi-action/actions/setup
+      with:
+        dokimi-repository: ${{ inputs.dokimi-repository }}
+        dokimi-ref: ${{ steps.engine.outputs.sha }}
+        out-dir: ${{ runner.temp }}/dokimi-out
+    - name: Require trusted default-branch controller
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      with:
+        script: if (context.ref !== `refs/heads/${context.payload.repository.default_branch}`) throw new Error('Record
+          requires default-branch controller');
+    - name: Authenticate merged result
+      id: source
+      uses: ./.dokimi-action/actions/verify-source-run
+      with:
+        source-run: ${{ inputs.source-run }}
+        source-attempt: ${{ inputs.source-attempt }}
+        source-workflow: ${{ inputs.source-workflow }}
+        controller-sha: ${{ inputs.controller-sha }}
+        policy-digest: ${{ inputs.policy-digest }}
+        allow-merged: 'true'
+        out: ${{ runner.temp }}/approved-run.json
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ steps.source.outputs.merged-sha }}
+        path: merged
+        persist-credentials: false
+        fetch-depth: 0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ github.event.repository.default_branch }}
+        path: baselines
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Commit baseline with compare-and-swap
+      shell: bash
+      working-directory: baselines
+      env:
+        TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_FILE: ${{ runner.temp }}/approved-run.json
+        MERGED_ROOT: ${{ github.workspace }}/merged
+        HEAD: ${{ steps.source.outputs.head-sha }}
+        PREVIOUS: ${{ inputs.expect-previous }}
+        POLICY: ${{ inputs.policy }}
+        COMMIT_AUTHOR: ${{ inputs.commit-author }}
+        COMMIT_EMAIL: ${{ inputs.commit-email }}
+      run: |
+        git config user.name "$COMMIT_AUTHOR"
+        git config user.email "$COMMIT_EMAIL"
+        [[ "$POLICY" != /* && "$POLICY" != *..* ]] || exit 2
+        for attempt in 1 2 3; do
+          if git ls-remote --exit-code --heads origin refs/heads/dokimi-baselines; then
+            git fetch origin refs/heads/dokimi-baselines
+            old=$(git rev-parse FETCH_HEAD)
+            git reset --hard "$old"
+          else
+            code=$?
+            [[ "$code" == 2 ]] || exit "$code"
+            old=''
+            git switch --orphan "dokimi-baselines-$attempt"
+          fi
+          args=(ci record "$RUN_FILE" --root "$MERGED_ROOT" --store "$PWD/records" --expect-previous "$PREVIOUS" --expected-head "$HEAD" --policy "$MERGED_ROOT/$POLICY")
+          dokimi "${args[@]}"
+          git add -- records
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -s -m 'Record approved Dokimi baseline'
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          if git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push --force-with-lease="refs/heads/dokimi-baselines:$old" origin HEAD:refs/heads/dokimi-baselines; then exit 0; fi
+        done
+        echo 'Baseline branch changed repeatedly; no update published' >&2
+        exit 1

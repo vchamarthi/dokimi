@@ -1,0 +1,421 @@
+{
+  "schema_version": "ci_baseline.v1",
+  "baseline_id": "sha256:e509240e28f9a1f87212b7315b5cea8b225c21ffa1b7fc3c4c2c8d9ff42db28d",
+  "bundle": {
+    "schema_version": "ci_run.v1",
+    "mode": "live",
+    "plan": {
+      "schema_version": "plan.v1",
+      "subjects": [
+        {
+          "id": "demo",
+          "kind": "skill",
+          "sha": "1111111111111111111111111111111111111111",
+          "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "suites": [
+        {
+          "id": "suite",
+          "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reasons": [
+            "changed subject"
+          ]
+        }
+      ],
+      "models": [
+        "model-a"
+      ],
+      "harnesses": [
+        "fixture"
+      ],
+      "grader": {
+        "id": "verifier",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "varied_variable": "skill",
+      "cells": [
+        {
+          "cell_id": "c-2e28d37213d76d14",
+          "arm": "none",
+          "model": "model-a",
+          "task": "task-0",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-2bb7ebb3027eb487",
+          "arm": "none",
+          "model": "model-a",
+          "task": "task-1",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-a86fcb93949e9327",
+          "arm": "none",
+          "model": "model-a",
+          "task": "task-2",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-a21ba025b5557890",
+          "arm": "none",
+          "model": "model-a",
+          "task": "task-3",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-cbe69ff7f7549194",
+          "arm": "none",
+          "model": "model-a",
+          "task": "task-4",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-92b44584aaa61661",
+          "arm": "none",
+          "model": "model-a",
+          "task": "task-5",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-7acfc032c9cb573f",
+          "arm": "approved",
+          "model": "model-a",
+          "task": "task-0",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-5a8f5a36ff2c544c",
+          "arm": "approved",
+          "model": "model-a",
+          "task": "task-1",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-52abe332ea6eb8b4",
+          "arm": "approved",
+          "model": "model-a",
+          "task": "task-2",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-b0a452b0edd0b2c8",
+          "arm": "approved",
+          "model": "model-a",
+          "task": "task-3",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-d6e3823479d50293",
+          "arm": "approved",
+          "model": "model-a",
+          "task": "task-4",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-15e5d8f50c8a5d78",
+          "arm": "approved",
+          "model": "model-a",
+          "task": "task-5",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-2b02b8d2b6f699dc",
+          "arm": "candidate",
+          "model": "model-a",
+          "task": "task-0",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-c4b438cec82c51fa",
+          "arm": "candidate",
+          "model": "model-a",
+          "task": "task-1",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-cb4b888dc3843583",
+          "arm": "candidate",
+          "model": "model-a",
+          "task": "task-2",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-4b5b0f1ad89dcf40",
+          "arm": "candidate",
+          "model": "model-a",
+          "task": "task-3",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-84c23f04ea0d27c6",
+          "arm": "candidate",
+          "model": "model-a",
+          "task": "task-4",
+          "rep": 1
+        },
+        {
+          "cell_id": "c-5c50760db0784a34",
+          "arm": "candidate",
+          "model": "model-a",
+          "task": "task-5",
+          "rep": 1
+        }
+      ],
+      "budget": {
+        "cells": 18,
+        "cost_usd": 10,
+        "wall_sec": 1000
+      }
+    },
+    "policy_digest": "sha256:c678210e50945577cb4fbe56d8e45f98afaee736f69a652907329495bc42f7ca",
+    "result": {
+      "schema_version": "result.v1",
+      "plan_digest": "sha256:bf9a06f28684e4deb90d443a5eff76e0904c9f5d7d07636f4f82f60e27d05dab",
+      "cells": [
+        {
+          "cell_id": "c-2e28d37213d76d14",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-2bb7ebb3027eb487",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-a86fcb93949e9327",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-a21ba025b5557890",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-cbe69ff7f7549194",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-92b44584aaa61661",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-7acfc032c9cb573f",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-5a8f5a36ff2c544c",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-52abe332ea6eb8b4",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-b0a452b0edd0b2c8",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-d6e3823479d50293",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-15e5d8f50c8a5d78",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-2b02b8d2b6f699dc",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-c4b438cec82c51fa",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-cb4b888dc3843583",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-4b5b0f1ad89dcf40",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-84c23f04ea0d27c6",
+          "status": "pass",
+          "model": "model-a"
+        },
+        {
+          "cell_id": "c-5c50760db0784a34",
+          "status": "pass",
+          "model": "model-a"
+        }
+      ]
+    },
+    "source": {
+      "repository": "owner/repository",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "base_sha": "2222222222222222222222222222222222222222"
+    },
+    "identity": {
+      "subject": "demo",
+      "kind": "skill",
+      "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "suite_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "framework_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "model": "model-a",
+      "harness": "fixture",
+      "grader_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "observations": [
+      {
+        "cell_id": "c-2e28d37213d76d14",
+        "score": 0.2,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": false
+      },
+      {
+        "cell_id": "c-2bb7ebb3027eb487",
+        "score": 0.2,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": false
+      },
+      {
+        "cell_id": "c-a86fcb93949e9327",
+        "score": 0.2,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": false
+      },
+      {
+        "cell_id": "c-a21ba025b5557890",
+        "score": 0.2,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": false
+      },
+      {
+        "cell_id": "c-cbe69ff7f7549194",
+        "score": 0.2,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": false
+      },
+      {
+        "cell_id": "c-92b44584aaa61661",
+        "score": 0.2,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": false
+      },
+      {
+        "cell_id": "c-7acfc032c9cb573f",
+        "score": 0.7,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-5a8f5a36ff2c544c",
+        "score": 0.7,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-52abe332ea6eb8b4",
+        "score": 0.7,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-b0a452b0edd0b2c8",
+        "score": 0.7,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-d6e3823479d50293",
+        "score": 0.7,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-15e5d8f50c8a5d78",
+        "score": 0.7,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-2b02b8d2b6f699dc",
+        "score": 0.8,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-c4b438cec82c51fa",
+        "score": 0.8,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-cb4b888dc3843583",
+        "score": 0.8,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-4b5b0f1ad89dcf40",
+        "score": 0.8,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-84c23f04ea0d27c6",
+        "score": 0.8,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      },
+      {
+        "cell_id": "c-5c50760db0784a34",
+        "score": 0.8,
+        "cost_usd": 0.01,
+        "elapsed_sec": 1,
+        "discovered": true
+      }
+    ],
+    "budget_stopped": false
+  },
+  "policy": {
+    "schema_version": "ci_policy.v1",
+    "min_tasks": 3,
+    "max_regression": 0.05,
+    "min_lift": 0.0,
+    "require_lift": true,
+    "require_discovery": false
+  }
+}

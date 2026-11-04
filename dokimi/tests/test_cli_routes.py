@@ -78,6 +78,7 @@ def test_help_lists_each_root_under_its_section():
     assert listed == {
         **dict.fromkeys(
             (
+                "ci",
                 "evaluate",
                 "baseline",
                 "report",
@@ -100,6 +101,8 @@ def test_help_lists_each_root_under_its_section():
 # The commands that can make a model call. Written out here, not read from cli_routes, so a
 # label that says `free` on a command that spends money (or the reverse) fails a test.
 PAID_PATHS = {
+    ("ci", "run"),
+    ("ci", "revalidate"),
     ("evaluate",),
     ("answers", "generate"),
     ("benchmark", "run"),

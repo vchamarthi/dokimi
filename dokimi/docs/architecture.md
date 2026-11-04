@@ -78,6 +78,17 @@ points up:
 So `report` (a track) can call `gate` (a component), and `gate` cannot import
 `report`. The sections below follow the tracks, not the layers.
 
+## CI orchestration
+
+`commands/ci.py` exposes check, run, gate, report, record and revalidate operations.
+The `runner/ci_pipeline.py` coordinator binds source provenance and approved-base
+controls to catalog or repository adapters. `runner/ci_catalog.py` measures catalog
+subjects; `runner/ci_repository.py` adapts repository evaluation. The shared
+`runner/ci_policy.py` gate rejects incomplete or mismatched evidence and keeps
+static checks ineligible for behavioral promotion. `runner/ci_store.py` records
+passing evidence with compare-and-swap in model-specific namespaces. See
+[CI integration](ci-integration.md) for the consumer and workflow trust boundaries.
+
 ## Static documentation track
 
 Lives under `dokimi/{ingest,metrics,gate,runner,report}`. `gate/` and

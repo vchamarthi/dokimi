@@ -109,7 +109,13 @@ an API provider. An unknown model, a missing login, a missing binary, an unusabl
 work directory and a subscription usage limit fail on the first attempt. A usage
 limit resets in hours, so a retry does not help.
 
-## Terms of use
+## Unattended runs
 
-A consumer subscription is for personal use. Keep CI and shared benchmark
-runs on API keys.
+Anthropic documents `claude setup-token` for CI and scripts using a supported
+Claude subscription ([authentication guide](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)).
+Use an explicitly configured subscription token for a hosted worker; a local
+login does not automatically authenticate GitHub Actions. Keep the token in the
+CI secret store and restrict it to the approved model job. Subscription usage
+limits still apply. Never interpret the CLI's list price as an API charge or
+replace unknown billed cost with zero. The [CI integration](ci-integration.md)
+supports a request-count cap for this transport.
