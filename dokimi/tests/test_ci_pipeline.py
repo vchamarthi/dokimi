@@ -311,7 +311,7 @@ def _revalidate_new_model(catalog: Path, tmp_path: Path, store: Path, fake_llm, 
 
 
 def test_report_values_cannot_render_remote_images_or_links():
-    import markdown
+    from markdown_it import MarkdownIt
 
     from tests.ci_fixtures import ci_bundle
     from dokimi.runner.ci_io import render
@@ -322,7 +322,7 @@ def test_report_values_cannot_render_remote_images_or_links():
     bundle["identity"]["model"] = "model`\n![tracker](https://example.invalid/track)\n`"
     verdict["reason"] = "[forged authority](https://example.invalid/claim)"
     verdict["task_effects"][0]["task"] = "case | ![tracker](https://example.invalid/task)"
-    html = markdown.markdown(render(bundle, verdict), extensions=["tables"])
+    html = MarkdownIt("commonmark").enable("table").render(render(bundle, verdict))
     assert "<img" not in html and '<a href="https://example.invalid/' not in html
 
 

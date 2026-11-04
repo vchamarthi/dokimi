@@ -296,8 +296,10 @@ def _branch_commit(root: Path, branch: str, files: dict[str, str], subject: str,
 
 def _merge_at(root: Path, branch: str, files: dict[str, str], subject: str, authored: str, committed: str) -> str:
     """A merge of ``branch`` into HEAD, its result edited (or its conflict resolved) to hold ``files``."""
-    subprocess.run(["git", "-C", str(root), "merge", "-q", "--no-ff", "--no-commit", branch],
-                   capture_output=True)  # a conflict exits 1: ``files`` resolves it
+    merged = subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t",
+                             "merge", "-q", "--no-ff", "--no-commit", branch], capture_output=True)
+    assert merged.returncode in (0, 1), merged.stderr.decode("utf-8", errors="replace")
+    assert git(root, "rev-parse", "--verify", "MERGE_HEAD") == git(root, "rev-parse", branch)
     return _commit_at(root, files, subject, authored, committed)
 
 
@@ -420,3 +422,19 @@ def test_the_repositorys_own_config_does_not_change_the_history(hist, key, value
     guidance_history._read_guidance_commits.cache_clear()
     git(hist["root"], "config", key, value)
     assert _prep(hist, f"guidance:rev:{gitlink}", "configured")["arm_rev"] == plain
+
+
+def test_merge_fixture_has_no_global_identity_dependency(tmp_path, monkeypatch):
+    global_config = tmp_path / "empty.gitconfig"
+    global_config.write_text("", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.useConfigOnly")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    root, shas = _three_commits(tmp_path)
+    side = _branch_commit(root, "side", {"AGENTS.md": "# side\n"}, "side guidance", "2030-04-01T00:00:00+00:00")
+    merge = _merge_at(root, "side", {"AGENTS.md": "# resolved\n"}, "Merge side", "2030-05-01T00:00:00+00:00",
+                      "2030-05-01T00:00:00+00:00")
+    assert git(root, "rev-list", "--parents", "-n", "1", merge).split() == [merge, shas["code"], side]
+    assert (root / "AGENTS.md").read_text() == "# resolved\n"

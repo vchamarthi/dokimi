@@ -275,6 +275,9 @@ filterwarnings = [
   # which pytest resets per test; a litellm response model first built in a later
   # test then warns, once per model (ReadOnly TypedDict items are not enforced).
   "ignore:Item 'summary' on TypedDict class 'ChatCompletionReasoningItem' is using the `ReadOnly` qualifier:UserWarning:pydantic._internal._generate_schema",
+  "ignore:Items? '(device_code|user_code|verification_uri)'(, '(device_code|user_code|verification_uri)')* on TypedDict class '_DeviceCode' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Item 'index' on TypedDict class 'ChatCompletionThinkingBlock' is using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Items? '(access_token|error)'(, '(access_token|error)')* on TypedDict class '_AccessTokenPoll' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
 ]
 # Test order is shuffled and `random` reseeded per test (pytest-randomly), so a
 # test that leans on another's leftovers fails. The header prints the seed;
