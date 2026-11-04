@@ -276,3 +276,40 @@ def test_report_values_cannot_render_remote_images_or_links():
     verdict["task_effects"][0]["task"] = "case | ![tracker](https://example.invalid/task)"
     html = markdown.markdown(render(bundle, verdict), extensions=["tables"])
     assert "<img" not in html and '<a href="https://example.invalid/' not in html
+
+
+def test_paid_fork_with_older_history_imports_verified_base(catalog: Path, tmp_path: Path):
+    import os
+
+    import yaml
+
+    from dokimi.cli import parse_args
+    from dokimi.runner.ci_source import revision
+
+    candidate = tmp_path / "candidate"
+    subprocess.run(["git", "clone", "--no-local", "-q", str(catalog), str(candidate)], check=True)
+    (candidate / "candidate-only").write_text("fork contribution")
+    _commit(candidate, "fork head")
+    head = revision(candidate)
+    (catalog / "base-only").write_text("upstream advanced after the fork")
+    _commit(catalog, "new upstream base")
+    base = revision(catalog)
+    missing = subprocess.run(["git", "-C", str(candidate), "cat-file", "-e", f"{base}^{{commit}}"],
+                             capture_output=True, text=True)
+    assert missing.returncode != 0
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/dokimi-pr.yml").read_text())
+    step = next(s for s in workflow["jobs"]["run"]["steps"]
+                if s.get("name") == "Import verified base object into candidate")
+    env = {**os.environ, "CANDIDATE": str(candidate), "BASE_ROOT": str(catalog), "BASE_SHA": base}
+    fetched = subprocess.run(["bash", "-euo", "pipefail", "-c", step["run"]],
+                             env=env, capture_output=True, text=True)
+    assert fetched.returncode == 0, fetched.stderr
+    out = tmp_path / "receipt"
+    args = parse_args(["ci", "check", str(candidate), "--out-dir", str(out), "--base-root", str(catalog),
+                       "--changed-from", base, "--expected-head", head, "--expected-base", base,
+                       "--source-repository", "vchamarthi/intel-skills"])
+    with pytest.raises(SystemExit) as checked:
+        args.func(args)
+    assert checked.value.code == 0
+    source = json.loads((out / "run.json").read_text())["source"]
+    assert source["head_sha"] == head and source["base_sha"] == base

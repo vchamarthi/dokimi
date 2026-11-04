@@ -320,6 +320,17 @@ jobs:
         path: base
         persist-credentials: false
         fetch-depth: 0
+    - name: Import verified base object into candidate
+      shell: bash
+      env:
+        CANDIDATE: ${{ github.workspace }}/candidate
+        BASE_ROOT: ${{ github.workspace }}/base
+        BASE_SHA: ${{ inputs.expected-base }}
+      run: |
+        [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Base must be an exact commit' >&2; exit 2; }
+        [[ "$(git -C "$BASE_ROOT" rev-parse --verify HEAD)" == "$BASE_SHA" ]] || { echo 'Base checkout differs from approved commit' >&2; exit 2; }
+        git -c core.hooksPath=/dev/null -C "$CANDIDATE" fetch --no-tags --no-recurse-submodules --no-write-fetch-head -- "$BASE_ROOT" "$BASE_SHA"
+        git -C "$CANDIDATE" cat-file -e "$BASE_SHA^{commit}"
     - name: Install pinned Claude subscription CLI
       if: ${{ inputs.provider == 'claude-cli' || inputs.judge-provider == 'claude-cli' }}
       shell: bash

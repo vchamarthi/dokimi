@@ -66,3 +66,13 @@ def test_hosted_paid_controller_rejects_execution_harnesses() -> None:
     guard = next(s for s in steps if s.get("name") == "Validate exact approved candidate")
     assert "process.env.HARNESS !== 'arms-runner'" in guard["with"]["script"]
     assert "process.env.SUBJECT_KIND !== 'catalog'" in guard["with"]["script"]
+
+
+def test_paid_candidate_imports_base_before_credentials() -> None:
+    steps = _wf("pr")["jobs"]["run"]["steps"]
+    imported = next(s for s in steps if s.get("name") == "Import verified base object into candidate")
+    runtime = next(s for s in steps if s.get("name") == "Run approved comparison")
+    assert steps.index(imported) < steps.index(runtime)
+    assert "secrets." not in str(imported)
+    assert "core.hooksPath=/dev/null" in imported["run"]
+    assert "--no-recurse-submodules" in imported["run"]
