@@ -117,6 +117,23 @@ dokimi ci run /path/to/content --changed-from BASE_SHA \
   --reps 1 --max-calls 36 --out-dir /path/to/subscription-receipts
 ```
 
+For hosted subscription runs, store `DOKIMI_CLAUDE_CODE_OAUTH_TOKEN` in the
+protected `dokimi-live` environment. The calling job must pass that exact secret
+name, even when its value exists only in the environment:
+
+```yaml
+secrets:
+  DOKIMI_CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.DOKIMI_CLAUDE_CODE_OAUTH_TOKEN }}
+```
+
+The reusable runtime job selects the environment through its `environment`
+input, then prefers this named environment token. The optional
+`claude-code-oauth-token` alias accepts an explicitly forwarded repository
+secret as a fallback. Neither token is referenced by the free check job.
+GitHub requires the caller to pass the same name before an environment secret
+becomes available to a reusable workflow; an omitted name resolves to an empty
+string. See [GitHub's reusable workflow secret rules](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#using-inputs-and-secrets-in-a-reusable-workflow).
+
 Both providers must use the subscription transport. API runs require
 `--max-usd`; subscription runs require `--max-calls`. A completed run can still
 fail or be inconclusive: the request cap controls usage, not the outcome.

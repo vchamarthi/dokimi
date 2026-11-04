@@ -89,6 +89,9 @@ name: dokimi-revalidate
       anthropic-api-key:
         description: Optional Anthropic credential
         required: false
+      DOKIMI_CLAUDE_CODE_OAUTH_TOKEN:
+        description: Same-name secret from the protected runtime environment; caller must explicitly pass this name
+        required: false
       claude-code-oauth-token:
         description: Explicit hosted Claude subscription OAuth token; local credentials are never uploaded by this
           workflow
@@ -201,7 +204,7 @@ jobs:
         HARNESS: ${{ inputs.harness }}
         OPENAI_API_KEY: ${{ secrets.openai-api-key }}
         ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
-        CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.claude-code-oauth-token }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.DOKIMI_CLAUDE_CODE_OAUTH_TOKEN || secrets.claude-code-oauth-token }}
         MAX_CALLS: ${{ inputs.max-calls }}
       run: |
         args=(ci revalidate "$ROOT" --baseline "$BASELINE" --out-dir "$OUT" --model "$MODEL" --provider "$PROVIDER" --judge-model "$JUDGE_MODEL" --judge-provider "$JUDGE_PROVIDER" --reps "$REPS" --subject "$SUBJECT" --harness "$HARNESS")
