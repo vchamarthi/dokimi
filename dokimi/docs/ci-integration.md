@@ -28,6 +28,7 @@ name: Dokimi
 on: [pull_request, merge_group]
 permissions:
   contents: read
+  pull-requests: read
 jobs:
   checks:
     uses: intel/dokimi/.github/workflows/dokimi-pr.yml@REVIEWED_COMMIT
@@ -50,6 +51,11 @@ executes no candidate scripts. Candidate configuration and policy must parse;
 the approved base supplies policy authority. When a first integration adds a
 policy that does not exist in the base, the engine's default policy applies.
 A candidate cannot lower its own thresholds.
+
+GitHub validates permissions for every job in a called workflow before evaluating
+job conditions. The caller must therefore allow pull request read access even
+when selecting the free mode; the free job itself requests only content read
+access.
 
 For a repository containing agent guidance rather than a skill catalog, choose
 `subject-kind: repo`. This runs repository readiness checks. It does not measure
