@@ -78,6 +78,9 @@ An existing skill has three arms: no skill, approved skill, and candidate skill.
 A new skill has no-skill and candidate arms. The approved base supplies the
 questions, tasks, grader configuration and policy. Head-only evaluation material
 cannot qualify the candidate against a yardstick it just introduced.
+`ci run` inventories head-added cases but does not execute them or spend its
+approved measurement budget on them. Approve the suite and revalidate it
+separately; the report identifies omitted exploratory cells.
 
 Use an explicit model, provider, independent judge and budget:
 

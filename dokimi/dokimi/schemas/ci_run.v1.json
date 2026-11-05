@@ -62,6 +62,14 @@
         "checked_sha": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$"
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },

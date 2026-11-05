@@ -34,19 +34,19 @@ new (Object.getPrototypeOf(async()=>{}).constructor)('github','context','core','
 
 
 def _run(tmp_path: Path, *, run_changes=None, pr_changes=None, result_changes=None,
-         members=None, artifact_changes=None, controller="", merged=False) -> list:
+         members=None, artifact_changes=None, controller="", merged=False, attempt=1, expected_policy=None) -> list:
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is required")
     wf = yaml.safe_load((ROOT / ".github/workflows/dokimi-publish.yml").read_text())
     script = wf["jobs"]["publish"]["steps"][0]["with"]["script"]
-    run = {"id":7,"run_attempt":1,"repository":{"full_name":"owner/repo"},"head_repository":{"full_name":"owner/fork"},
+    run = {"id":7,"run_attempt":attempt,"conclusion":"success","repository":{"full_name":"owner/repo"},"head_repository":{"full_name":"owner/fork"},
            "head_sha":HEAD,"head_branch":"topic","workflow_id":19,"event":"pull_request","status":"completed",
            "path":".github/workflows/caller.yml","pull_requests":[{"number":12,"head":{"sha":HEAD},"base":{"sha":BASE}}],
            "html_url":"https://github.com/owner/repo/actions/runs/7", **(run_changes or {})}
     pr = {"number":12,"state":"open","head":{"sha":HEAD,"repo":{"full_name":"owner/fork"}},
           "base":{"sha":BASE,"repo":{"full_name":"owner/repo"}}, **(pr_changes or {})}
-    result = {"schema_version":"ci_run.v1","source":{"repository":"owner/repo","head_sha":HEAD,"base_sha":BASE},
+    result = {"schema_version":"ci_run.v1","source":{"repository":"owner/repo","head_sha":HEAD,"base_sha":BASE,"run_id":7,"run_attempt":attempt},
               "mode":"static","policy_digest":"sha256:"+"d"*64,
               "identity":{"subject":"catalog","kind":"catalog","content_digest":"sha256:"+"d"*64,
                           "suite_digest":"sha256:"+"d"*64,"framework_digest":"sha256:"+"d"*64,
@@ -62,13 +62,13 @@ def _run(tmp_path: Path, *, run_changes=None, pr_changes=None, result_changes=No
         for name, data in (members or {"run.json":json.dumps(result)}).items():
             z.writestr(name,data)
     (tmp_path/"result.zip").write_bytes(buf.getvalue())
-    case={"run":run,"pr":pr,"zip":str(tmp_path/"result.zip"),"artifacts":[{"id":3,"name":"dokimi-run-7-1","expired":False,
+    case={"run":run,"pr":pr,"zip":str(tmp_path/"result.zip"),"artifacts":[{"id":3,"name":f"dokimi-run-7-{attempt}","expired":False,
            "size_in_bytes":len(buf.getvalue()),"workflow_run":{"id":7}, **(artifact_changes or {})}]}
     for name, value in (("case.json",case),("script.json",script)):
         (tmp_path/name).write_text(json.dumps(value))
     (tmp_path/"harness.cjs").write_text(_HARNESS)
-    env={**os.environ,"SOURCE_RUN":"7","SOURCE_ATTEMPT":"1","SOURCE_WORKFLOW":".github/workflows/caller.yml",
-         "CONTROLLER_SHA":controller,"EXPECTED_POLICY":"sha256:"+"d"*64}
+    env={**os.environ,"SOURCE_RUN":"7","SOURCE_ATTEMPT":str(attempt),"SOURCE_WORKFLOW":".github/workflows/caller.yml",
+         "CONTROLLER_SHA":controller,"EXPECTED_POLICY":expected_policy or "sha256:"+"d"*64}
     if merged:
         env.update({"ALLOW_MERGED":"true","VERIFIED_OUT":str(tmp_path/"verified.json")})
     out=subprocess.run([node,str(tmp_path/"harness.cjs"),str(tmp_path/"case.json"),str(tmp_path/"script.json")],
@@ -167,3 +167,38 @@ def test_paid_subscription_receipt_accepts_bound_cli_version(tmp_path: Path) -> 
             "judge_model":"judge","judge_provider":"claude-cli","reps":1,"billing":"subscription",
             "transport":"claude-cli","cli_version":"2.1.306"}})
     assert next(data for kind,data in calls if kind=="comment")["issue_number"] == 12
+
+
+@pytest.mark.parametrize("source,attempt", [
+    ({"run_id":6,"run_attempt":1},1), ({"run_id":7,"run_attempt":1},2), ({},1)])
+def test_same_head_stale_run_or_attempt_receipt_cannot_publish(tmp_path: Path,source: dict,attempt: int) -> None:
+    calls = _run(tmp_path,attempt=attempt,result_changes={"source":{
+        "repository":"owner/repo","head_sha":HEAD,"base_sha":BASE,**source}})
+    assert any(kind=="failed" for kind,_ in calls)
+    assert not [data for kind,data in calls if kind=="comment"]
+
+
+def test_fresh_failed_current_run_can_publish_informational_receipt(tmp_path: Path) -> None:
+    calls = _run(tmp_path,run_changes={"conclusion":"failure"})
+    assert next(data for kind,data in calls if kind=="comment")["issue_number"] == 12
+
+
+@pytest.mark.parametrize("conclusion", ["success","failure"])
+def test_controller_conclusion_is_required_for_passing_evidence(tmp_path: Path,conclusion: str) -> None:
+    from tests.ci_fixtures import ci_bundle
+    from dokimi.runner.ci_policy import DEFAULT_POLICY, gate_bundle
+    from dokimi.runner.plan import plan_digest
+
+    bundle = ci_bundle()
+    bundle["source"] = {"repository":"owner/repo","head_sha":HEAD,"base_sha":BASE,"run_id":7,"run_attempt":1}
+    bundle["plan"]["subjects"][0]["sha"] = HEAD
+    bundle["result"]["plan_digest"] = plan_digest(bundle["plan"])
+    assert gate_bundle(bundle,DEFAULT_POLICY)["promotion_eligible"]
+    calls = _run(tmp_path, merged=True, controller=CONTROLLER,expected_policy=bundle["policy_digest"],
+        run_changes={"event":"workflow_dispatch","head_sha":CONTROLLER,"conclusion":conclusion,
+                     "head_repository":{"full_name":"owner/repo"},"pull_requests":[],
+                     "display_title":f"dokimi:model pr=12 head={HEAD} base={BASE}"},
+        pr_changes={"state":"closed","merged":True,"merge_commit_sha":"e"*40},
+        result_changes=bundle)
+    assert (tmp_path/"verified.json").exists() is (conclusion=="success")
+    assert any(kind=="failed" for kind,_ in calls) is (conclusion!="success")

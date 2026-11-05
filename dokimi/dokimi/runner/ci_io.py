@@ -29,11 +29,25 @@ def output_directory(root: Path, out: Path) -> Path:
         raise ValueError("CI output must be outside the source checkout and its ancestors")
     if out.exists():
         if not out.is_dir() or any(p.name not in FILES or not p.is_file() or p.is_symlink() for p in out.iterdir()):
+            _invalidate_prior_run(out)
             raise ValueError("CI output must be a dedicated empty or earlier CI receipt directory")
         for path in out.iterdir():
             path.unlink()
     out.mkdir(parents=True, exist_ok=True)
     return out
+
+
+def _invalidate_prior_run(out: Path) -> None:
+    marker = out / "run.json"
+    if not out.is_dir() or marker.is_symlink() or not marker.is_file():
+        return
+    try:
+        if marker.stat().st_size > 2 * 1024 * 1024:
+            return
+        load_artifact("ci_run", marker)
+    except (ValueError, OSError, UnicodeError):
+        return
+    marker.unlink()
 
 
 def read_policy(path: Path | None = None) -> dict[str, Any]:
@@ -61,6 +75,8 @@ def render(bundle: dict[str, Any], verdict: dict[str, Any]) -> str:
     if bundle["mode"] == "static":
         lines.append("Deterministic checks only. Task outcomes, skill utility and hardware performance were not measured.")
     else:
+        lines.extend(_text(reason) for suite in bundle["plan"]["suites"] for reason in suite["reasons"])
+        lines.append("")
         lines.extend([f"Model: `{_text(identity['model'])}`; harness: `{_text(identity['harness'])}`", "",
                       "| Task | Candidate minus approved | Candidate minus none |", "|---|---:|---:|"])
         for effect in verdict.get("task_effects", []):

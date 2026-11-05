@@ -8,7 +8,10 @@ from __future__ import annotations
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from dokimi.runner.ci_catalog import CatalogPlan
 
 from dokimi import __version__
 from dokimi.artifacts import load_artifact, save_artifact
@@ -126,6 +129,7 @@ def run_live(root: Path, out: Path, *, base_root: Path | None, base: str | None,
                                     reps=reps, harness=harness)
             if len(prepared.subjects) != 1:
                 raise ValueError("live CI needs exactly one eligible --subject with an approved suite")
+            _approved_cases_only(prepared)
             for subject in prepared.subjects:
                 subject.plan["budget"]["cost_usd"] = cap
             raw = run_catalog(prepared, max_cost_usd=cap, max_calls=max_calls)
@@ -133,6 +137,16 @@ def run_live(root: Path, out: Path, *, base_root: Path | None, base: str | None,
             parts["budget_stopped"] = raw["budget_stopped"]
         bundle = bind_run(parts, source, policy, mode="live")
         return write_bundle(out, bundle, policy)
+
+
+def _approved_cases_only(prepared: CatalogPlan) -> None:
+    if not prepared.exploratory:
+        return
+    skipped = sum(len(subject.plan["cells"]) for subject in prepared.exploratory)
+    for subject in prepared.subjects:
+        subject.plan["suites"][0]["reasons"].append(
+            f"{skipped} head-added exploratory cells not executed in CI; approve the suite and revalidate separately")
+    prepared.exploratory.clear()
 
 
 def _trusted_path(path: Path | None, root: Path, trusted: Path) -> Path | None:

@@ -78,12 +78,13 @@ def test_receipt_directory_does_not_clobber_an_unrelated_file(catalog: Path, tmp
     from dokimi.runner.ci_pipeline import run_check
 
     out = tmp_path / "receipt"
-    out.mkdir()
+    assert run_check(catalog, out)["status"] == "pass"
     keep = out / "customer-data.json"
     keep.write_text("keep")
     with pytest.raises(ValueError, match="dedicated"):
         run_check(catalog, out)
     assert keep.read_text() == "keep"
+    assert not (out / "run.json").exists()
 
 
 def test_symlink_output_directory_is_refused(catalog: Path, tmp_path: Path):
@@ -96,6 +97,19 @@ def test_symlink_output_directory_is_refused(catalog: Path, tmp_path: Path):
     with pytest.raises(ValueError, match="symlink"):
         run_check(catalog, out)
     assert list(target.iterdir()) == []
+
+
+def test_invalid_output_does_not_delete_a_non_dokimi_run_file(catalog: Path, tmp_path: Path):
+    from dokimi.runner.ci_pipeline import run_check
+
+    out = tmp_path / "receipt"
+    out.mkdir()
+    marker = out / "run.json"
+    marker.write_text('{"customer": "keep this data"}')
+    (out / "other.txt").write_text("keep")
+    with pytest.raises(ValueError, match="dedicated"):
+        run_check(catalog, out)
+    assert json.loads(marker.read_text()) == {"customer": "keep this data"}
 
 
 def test_candidate_cannot_weaken_authoritative_base_policy(catalog: Path, tmp_path: Path):
@@ -361,3 +375,41 @@ def test_paid_fork_with_older_history_imports_verified_base(catalog: Path, tmp_p
     assert checked.value.code == 0
     source = json.loads((out / "run.json").read_text())["source"]
     assert source["head_sha"] == head and source["base_sha"] == base
+
+
+def test_ci_does_not_spend_unreported_calls_on_head_added_cases(catalog: Path, tmp_path: Path,
+                                                              monkeypatch, fake_llm):
+    from dokimi.cli import parse_args
+    from dokimi.llm import Reply
+    from dokimi.metrics.usage import UsageRecord
+    from dokimi.runner import ci_catalog
+    from dokimi.runner.ci_source import revision
+
+    path = catalog / "skills/dpnp-io/evals/evals.json"
+    cases = [{"id": f"case-{i}", "prompt": f"Question {i}", "expected_output": f"Answer {i}"} for i in range(3)]
+    path.write_text(json.dumps({"skill_name": "dpnp-io", "evals": cases}))
+    _commit(catalog, "approved suite")
+    base = revision(catalog)
+    path.write_text(json.dumps({"skill_name": "dpnp-io", "evals": [*cases, {
+        "id": "head-only", "prompt": "Unapproved extra question", "expected_output": "Extra answer"}]}))
+    _commit(catalog, "propose another question")
+    monkeypatch.setenv("OPENAI_API_KEY", "offline-fixture-key")
+    monkeypatch.setattr(ci_catalog, "list_cost_usd", lambda *_args: 0.001)
+    usage = UsageRecord(cost_usd=0.001, n_calls=1, cost_known_calls=1)
+    for arm in ("none", "approved", "candidate"):
+        for _ in cases:
+            fake_llm.push(Reply("answer", usage, model_id="gpt-4o-mini"),
+                          Reply("No" if arm == "none" else "Yes", usage, model_id="gpt-4o"),
+                          Reply("Yes" if arm == "none" else "No", usage, model_id="gpt-4o"))
+    out = tmp_path / "receipt"
+    args = parse_args(["ci", "run", str(catalog), "--changed-from", base, "--out-dir", str(out),
+                       "--max-usd", "1", "--model", "gpt-4o-mini", "--provider", "openai", "--reps", "1",
+                       "--judge-model", "gpt-4o", "--judge-provider", "openai", "--subject", "skill/dpnp-io"])
+    with pytest.raises(SystemExit) as measured:
+        args.func(args)
+    assert measured.value.code == 0
+    assert len(fake_llm.requests) == 27
+    bundle = json.loads((out / "run.json").read_text())
+    assert sum(o["agent_calls"] for o in bundle["observations"]) == 27
+    assert "head-added" in (out / "report.md").read_text()
+    assert "not executed" in (out / "report.md").read_text()

@@ -38,6 +38,18 @@ def _repository(root: Path) -> str:
     return "local/local"
 
 
+def _hosted_run() -> dict[str, int]:
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return {}
+    result = {}
+    for key, variable in (("run_id", "GITHUB_RUN_ID"), ("run_attempt", "GITHUB_RUN_ATTEMPT")):
+        value = os.environ.get(variable, "")
+        if re.fullmatch(r"[1-9][0-9]*", value) is None:
+            raise ValueError(f"GitHub {variable} must be a positive integer")
+        result[key] = int(value)
+    return result
+
+
 def source_identity(root: Path, *, base: str | None = None, source_repository: str | None = None,
                     expected_head: str | None = None, expected_base: str | None = None,
                     clean: bool = False) -> dict[str, Any]:
@@ -59,7 +71,7 @@ def source_identity(root: Path, *, base: str | None = None, source_repository: s
     repository = source_repository or _repository(root)
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("source repository must be owner/name")
-    return {"repository": repository, "head_sha": head, "base_sha": base_sha, "checked_sha": checked}
+    return {"repository": repository, "head_sha": head, "base_sha": base_sha, "checked_sha": checked, **_hosted_run()}
 
 
 @contextmanager

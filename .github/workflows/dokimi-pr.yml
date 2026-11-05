@@ -218,10 +218,36 @@ jobs:
       shell: bash
       env:
         REPORT: ${{ runner.temp }}/dokimi-out/report.md
+        RUN_FILE: ${{ runner.temp }}/dokimi-out/run.json
       run: |
-        if [[ -f "$REPORT" ]]; then cat -- "$REPORT" >> "$GITHUB_STEP_SUMMARY"; fi
+        python - <<'PYCODE'
+        import json
+        import os
+        from pathlib import Path
+
+        receipt = Path(os.environ["RUN_FILE"])
+        try:
+            value = json.loads(receipt.read_text(encoding="utf-8")) if not receipt.is_symlink() else None
+            source = value.get("source") if isinstance(value, dict) else None
+            fresh = isinstance(source, dict) and all(
+                type(source.get(key)) is int and source[key] == int(os.environ[variable])
+                for key, variable in (("run_id", "GITHUB_RUN_ID"), ("run_attempt", "GITHUB_RUN_ATTEMPT"))
+            )
+        except (OSError, ValueError, KeyError, RecursionError):
+            fresh = False
+        if not fresh:
+            print("No current-run receipt; skipping summary and artifact publication.")
+            raise SystemExit(0)
+        with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+            output.write("fresh=true\n")
+        report = Path(os.environ["REPORT"])
+        if report.is_file() and not report.is_symlink():
+            with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+                summary.write(report.read_text(encoding="utf-8"))
+        PYCODE
+      id: receipt
     - name: Upload run JSON only
-      if: ${{ always() }}
+      if: ${{ always() && steps.receipt.outputs.fresh == 'true' }}
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: dokimi-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -375,10 +401,36 @@ jobs:
       shell: bash
       env:
         REPORT: ${{ runner.temp }}/dokimi-out/report.md
+        RUN_FILE: ${{ runner.temp }}/dokimi-out/run.json
       run: |
-        if [[ -f "$REPORT" ]]; then cat -- "$REPORT" >> "$GITHUB_STEP_SUMMARY"; fi
+        python - <<'PYCODE'
+        import json
+        import os
+        from pathlib import Path
+
+        receipt = Path(os.environ["RUN_FILE"])
+        try:
+            value = json.loads(receipt.read_text(encoding="utf-8")) if not receipt.is_symlink() else None
+            source = value.get("source") if isinstance(value, dict) else None
+            fresh = isinstance(source, dict) and all(
+                type(source.get(key)) is int and source[key] == int(os.environ[variable])
+                for key, variable in (("run_id", "GITHUB_RUN_ID"), ("run_attempt", "GITHUB_RUN_ATTEMPT"))
+            )
+        except (OSError, ValueError, KeyError, RecursionError):
+            fresh = False
+        if not fresh:
+            print("No current-run receipt; skipping summary and artifact publication.")
+            raise SystemExit(0)
+        with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+            output.write("fresh=true\n")
+        report = Path(os.environ["REPORT"])
+        if report.is_file() and not report.is_symlink():
+            with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+                summary.write(report.read_text(encoding="utf-8"))
+        PYCODE
+      id: receipt
     - name: Upload run JSON only
-      if: ${{ always() }}
+      if: ${{ always() && steps.receipt.outputs.fresh == 'true' }}
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: dokimi-run-${{ github.run_id }}-${{ github.run_attempt }}
