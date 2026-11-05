@@ -156,3 +156,14 @@ def test_unapproved_pr_job_cannot_be_promoted_after_merge(tmp_path: Path) -> Non
                  result_changes={"mode":"live"})
     assert any(kind=="failed" and "approved controller" in data for kind,data in calls)
     assert not (tmp_path/"verified.json").exists()
+
+
+def test_paid_subscription_receipt_accepts_bound_cli_version(tmp_path: Path) -> None:
+    calls = _run(tmp_path, controller=CONTROLLER,
+        run_changes={"event":"workflow_dispatch","head_sha":CONTROLLER,
+                     "head_repository":{"full_name":"owner/repo"},"pull_requests":[],
+                     "display_title":f"dokimi:model pr=12 head={HEAD} base={BASE}"},
+        result_changes={"mode":"live","runtime":{"requested_model":"answer","provider":"claude-cli",
+            "judge_model":"judge","judge_provider":"claude-cli","reps":1,"billing":"subscription",
+            "transport":"claude-cli","cli_version":"2.1.306"}})
+    assert next(data for kind,data in calls if kind=="comment")["issue_number"] == 12

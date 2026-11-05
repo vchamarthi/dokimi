@@ -103,6 +103,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: ${{ inputs.environment }}
+    env:
+      DISABLE_UPDATES: '1'
+      DISABLE_AUTOUPDATER: '1'
     permissions:
       contents: read
     steps:

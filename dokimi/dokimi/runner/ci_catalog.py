@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -40,6 +41,7 @@ class CatalogPlan:
     judge_model: str
     judge_provider: str
     harness: str
+    cli_version: str | None = None
 
     @property
     def plans(self) -> list[dict[str, Any]]:
@@ -111,8 +113,7 @@ def _subject(prepared: CatalogPlan, root: Path, suite_root: Path, row: dict, qs:
     subject_id = f"skill/{row['name']}"
     suite_hash = fingerprint({"questions": qs, "tasks": tasks, "scope": scope})
     package_hash = framework_digest()
-    grader_hash = fingerprint({"framework": package_hash, "judge": prepared.judge_model,
-                               "provider": prepared.judge_provider, "checks": [q["grading"] for q in qs]})
+    grader_hash = _grader_digest(prepared, package_hash, qs)
     model = resolve_model(prepared.model, prepared.provider)
     task_ids = [f"{subject_id}::{q['id']}" for q in qs] + [f"{subject_id}::{t['name']}" for t in tasks]
     cells = plan_cells(contexts, [model], task_ids, reps)
@@ -239,7 +240,8 @@ def _run_subject(prepared: CatalogPlan, subject: CatalogSubject, meter: _Meter) 
             "runtime": {"requested_model": prepared.model, "provider": prepared.provider,
                         "judge_model": prepared.judge_model, "judge_provider": prepared.judge_provider,
                         "reps": max(cell["rep"] for cell in subject.plan["cells"]),
-                        **({"billing": "subscription", "transport": "claude-cli"} if meter.subscription else {})}}
+                        **({"billing": "subscription", "transport": "claude-cli", "cli_version": prepared.cli_version}
+                           if meter.subscription else {})}}
 
 
 def _complete(model: LLM, prompt: str, meter: _Meter, *, system: str = "", draw: int = 0):
@@ -340,6 +342,8 @@ def verify_record_identity(root: Path, bundle: dict[str, Any], *, content_only: 
                            model=runtime["requested_model"], provider=runtime["provider"],
                            judge_model=runtime["judge_model"], judge_provider=runtime["judge_provider"],
                            reps=runtime["reps"], harness=identity["harness"])
+    if not content_only and "cli_version" in runtime:
+        _bind_cli_version(current, runtime["cli_version"])
     expected = current.subjects[0].identity if len(current.subjects) == 1 else {}
     keys = ("subject", "kind", "content_digest", "suite_digest") if content_only else tuple(identity)
     if any(expected.get(key) != identity.get(key) for key in keys):
@@ -360,10 +364,34 @@ def _subscription(prepared: CatalogPlan) -> bool:
 
 
 def _subscription_preflight(prepared: CatalogPlan, max_calls: int | None) -> None:
+    """Require an explicit first-party browser login or dedicated subscription OAuth token."""
     if prepared.harness != "arms-runner" or {prepared.provider, prepared.judge_provider} != {"claude-cli"}:
         raise ValueError("subscription trials require both providers to be claude-cli with arms-runner")
     if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls < 1:
         raise ValueError("subscription trials require a finite positive max_calls cap")
     cli = llm_cli.detect("claude-cli")
-    if not cli.installed or not cli.authenticated or not cli.method.startswith("claude.ai"):
+    native_methods = {"claude.ai (firstParty)", "oauth_token (firstParty)"}
+    if not cli.installed or not cli.authenticated or cli.method not in native_methods:
         raise ValueError("claude-cli requires an authenticated Claude subscription login")
+    _bind_cli_version(prepared, getattr(cli, "version", None))
+
+
+def _grader_digest(prepared: CatalogPlan, framework: str, questions: list[dict],
+                   cli_version: str | None = None) -> str:
+    payload = {"framework": framework, "judge": prepared.judge_model,
+               "provider": prepared.judge_provider, "checks": [q["grading"] for q in questions]}
+    if cli_version is not None:
+        payload["cli_version"] = cli_version
+    return fingerprint(payload)
+
+
+def _bind_cli_version(prepared: CatalogPlan, version: str | None) -> None:
+    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?(?: \(Claude Code\))?", version):
+        raise ValueError("subscription trials require a known Claude CLI version")
+    if prepared.cli_version is not None and prepared.cli_version != version:
+        raise ValueError("Claude CLI version changed; create a fresh plan before running")
+    prepared.cli_version = version
+    for subject in [*prepared.subjects, *prepared.exploratory]:
+        digest = _grader_digest(prepared, subject.identity["framework_digest"], subject.questions, version)
+        subject.identity["grader_digest"] = digest
+        subject.plan["grader"]["digest"] = digest

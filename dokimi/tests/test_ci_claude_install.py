@@ -38,6 +38,7 @@ const fs = require('fs');
 const path = require('path');
 const exposed = Object.keys(process.env).filter(k => /(?:TOKEN|API_KEY)$/.test(k));
 if (exposed.length) throw new Error('Credentials were supplied to the installer');
+if (process.env.DISABLE_UPDATES !== '1' || process.env.DISABLE_AUTOUPDATER !== '1') throw new Error('Pinned CLI updates are enabled');
 const binary = path.join(__dirname, 'native-cli');
 fs.writeFileSync(binary, '#!/bin/sh\nprintf "2.1.306 (Claude Code)\\n"\n');
 fs.chmodSync(binary, 0o755);
@@ -53,7 +54,7 @@ fs.writeFileSync(path.join(__dirname, 'installer-environment.json'), JSON.string
     claude = tools / "claude"
     claude.write_text('#!/bin/sh\nexec "$FIXTURE_NPM_ROOT/@anthropic-ai/claude-code/native-cli" "$@"\n')
     claude.chmod(0o755)
-    env = {"PATH": f"{tools}:{os.environ['PATH']}", "FIXTURE_NPM_ROOT": str(npm_root)}
+    env = {"PATH": f"{tools}:{os.environ['PATH']}", "FIXTURE_NPM_ROOT": str(npm_root), **job.get("env", {})}
     absent = subprocess.run([str(claude), "--version"], env=env, capture_output=True, text=True)
     assert absent.returncode != 0
     installed = subprocess.run(["bash", "-euo", "pipefail", "-c", install["run"]],

@@ -137,6 +137,9 @@ string. See [GitHub's reusable workflow secret rules](https://docs.github.com/en
 Both providers must use the subscription transport. API runs require
 `--max-usd`; subscription runs require `--max-calls`. A completed run can still
 fail or be inconclusive: the request cap controls usage, not the outcome.
+The observed Claude CLI version is recorded and bound into grader identity.
+Hosted workers disable CLI updates during measurement; changing CLI version
+requires a fresh plan and explicit baseline revalidation.
 
 ## Gate and report the evidence
 

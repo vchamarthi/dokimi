@@ -208,6 +208,11 @@
         },
         "transport": {
           "const": "claude-cli"
+        },
+        "cli_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Observed Claude CLI version bound into the grader identity before subscription model calls."
         }
       },
       "dependentRequired": {
