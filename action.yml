@@ -1,0 +1,137 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: Dokimi CI
+description: Run an installed, pinned Dokimi against external content. Install with actions/setup first.
+inputs:
+  mode:
+    description: Explicit check (free) or run (paid); configuration never enables run
+    required: false
+    default: check
+  root:
+    description: Content checkout path
+    required: false
+    default: .
+  base-root:
+    description: Approved base checkout, required for run
+    required: false
+    default: ''
+  changed-from:
+    description: Base commit for change selection
+    required: false
+    default: ''
+  subject-kind:
+    description: catalog or repo; checks for guidance-only repositories use repo
+    required: false
+    default: catalog
+  config:
+    description: Trusted configuration path
+    required: false
+    default: ''
+  policy:
+    description: Trusted policy path
+    required: false
+    default: ''
+  out-dir:
+    description: Output directory; empty uses RUNNER_TEMP/dokimi-out
+    required: false
+    default: ''
+  max-usd:
+    description: Explicit USD cap for API billing; omit for Claude subscription
+    required: false
+    default: ''
+  model:
+    description: Model under measurement
+    required: false
+    default: ''
+  provider:
+    description: Model provider
+    required: false
+    default: ''
+  judge-model:
+    description: Independent judge model
+    required: false
+    default: ''
+  judge-provider:
+    description: Judge provider
+    required: false
+    default: ''
+  reps:
+    description: Repetitions
+    required: false
+    default: '3'
+  subject:
+    description: Declared subject ID
+    required: false
+    default: ''
+  harness:
+    description: Harness ID
+    required: false
+    default: arms-runner
+  expected-head:
+    description: 'Explicit GitHub provenance: expected-head'
+    required: false
+    default: ''
+  expected-base:
+    description: 'Explicit GitHub provenance: expected-base'
+    required: false
+    default: ''
+  source-repository:
+    description: 'Explicit GitHub provenance: source-repository'
+    required: false
+    default: ''
+  max-calls:
+    description: Finite call cap for subscription runs
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+  - name: Check or evaluate content
+    id: ci
+    shell: bash
+    env:
+      MODE: ${{ inputs.mode }}
+      ROOT: ${{ inputs.root }}
+      BASE: ${{ inputs.changed-from }}
+      BASE_ROOT: ${{ inputs.base-root }}
+      OUT: ${{ inputs.out-dir }}
+      CONFIG: ${{ inputs.config }}
+      POLICY: ${{ inputs.policy }}
+      SUBJECT_KIND: ${{ inputs.subject-kind }}
+      MAX_USD: ${{ inputs.max-usd }}
+      MODEL: ${{ inputs.model }}
+      PROVIDER: ${{ inputs.provider }}
+      JUDGE_MODEL: ${{ inputs.judge-model }}
+      JUDGE_PROVIDER: ${{ inputs.judge-provider }}
+      REPS: ${{ inputs.reps }}
+      SUBJECT: ${{ inputs.subject }}
+      HARNESS: ${{ inputs.harness }}
+      EXPECTED_HEAD: ${{ inputs.expected-head }}
+      EXPECTED_BASE: ${{ inputs.expected-base }}
+      SOURCE_REPOSITORY: ${{ inputs.source-repository }}
+      MAX_CALLS: ${{ inputs.max-calls }}
+    run: |
+      OUT=${OUT:-${RUNNER_TEMP:?}/dokimi-out}
+      case "$MODE" in
+        check) args=(ci check "$ROOT" --out-dir "$OUT" --subject-kind "$SUBJECT_KIND") ;;
+        run)
+          [[ "$HARNESS" == arms-runner && "$SUBJECT_KIND" == catalog ]] || { echo 'Hosted paid action requires catalog arms-runner; executable workers require separate isolation' >&2; exit 2; }
+          [[ -n "$BASE_ROOT" && -n "$POLICY" && -n "$MODEL" && -n "$JUDGE_MODEL" ]] || { echo 'run requires base-root, policy, model and judge-model' >&2; exit 2; }
+          args=(ci run "$ROOT" --base-root "$BASE_ROOT" --out-dir "$OUT" --subject-kind "$SUBJECT_KIND"
+            --model "$MODEL" --provider "$PROVIDER" --judge-model "$JUDGE_MODEL" --judge-provider "$JUDGE_PROVIDER"
+            --reps "$REPS" --subject "$SUBJECT" --harness "$HARNESS") ;;
+        *) echo 'mode must be check or run' >&2; exit 2 ;;
+      esac
+      [[ -z "$BASE_ROOT" || "$MODE" != check ]] || args+=(--base-root "$BASE_ROOT")
+      [[ -z "$BASE" || "$MODE" != check ]] || args+=(--changed-from "$BASE")
+      if [[ "$MODE" == run ]]; then
+        [[ -z "$MAX_USD" || "$MAX_USD" == 0 ]] || args+=(--max-usd "$MAX_USD")
+        [[ -z "${MAX_CALLS:-}" || "$MAX_CALLS" == 0 ]] || args+=(--max-calls "$MAX_CALLS")
+      fi
+      [[ -z "$CONFIG" ]] || args+=(--config "$CONFIG")
+      [[ -z "$POLICY" ]] || args+=(--policy "$POLICY")
+      [[ -z "${EXPECTED_HEAD:-}" ]] || args+=(--expected-head "$EXPECTED_HEAD")
+      [[ -z "${EXPECTED_BASE:-}" ]] || args+=(--expected-base "$EXPECTED_BASE")
+      [[ -z "${SOURCE_REPOSITORY:-}" ]] || args+=(--source-repository "$SOURCE_REPOSITORY")
+      dokimi "${args[@]}"

@@ -1,0 +1,8 @@
+{
+  "schema_version": "ci_policy.v1",
+  "min_tasks": 3,
+  "max_regression": 0.05,
+  "min_lift": 0.0,
+  "require_lift": true,
+  "require_discovery": false
+}

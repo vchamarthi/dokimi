@@ -1,0 +1,593 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "https://github.com/intel/dokimi/schemas/ci_run.v1.json",
+  "title": "CI run bundle v1",
+  "required": [
+    "schema_version",
+    "mode",
+    "policy_digest",
+    "plan",
+    "result",
+    "source",
+    "identity",
+    "observations",
+    "budget_stopped"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ci_run.v1"
+    },
+    "mode": {
+      "enum": [
+        "static",
+        "live"
+      ]
+    },
+    "policy_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "plan": {
+      "$ref": "#/$defs/plan"
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "source": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "head_sha",
+        "base_sha"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "head_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "base_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "checked_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "identity": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject",
+        "kind",
+        "content_digest",
+        "suite_digest",
+        "framework_digest",
+        "model",
+        "harness",
+        "grader_digest"
+      ],
+      "properties": {
+        "subject": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*(/[a-zA-Z0-9][a-zA-Z0-9_.-]*)?$"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "suite_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "framework_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "harness": {
+          "type": "string",
+          "minLength": 1
+        },
+        "grader_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cell_id",
+          "score",
+          "cost_usd",
+          "elapsed_sec",
+          "discovered"
+        ],
+        "properties": {
+          "cell_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "elapsed_sec": {
+            "type": "number",
+            "minimum": 0
+          },
+          "discovered": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "agent_calls": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "budget_stopped": {
+      "type": "boolean"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested_model",
+        "provider",
+        "judge_model",
+        "judge_provider",
+        "reps"
+      ],
+      "properties": {
+        "requested_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "judge_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "judge_provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "billing": {
+          "const": "subscription"
+        },
+        "transport": {
+          "const": "claude-cli"
+        },
+        "cli_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Observed Claude CLI version bound into the grader identity before subscription model calls."
+        }
+      },
+      "dependentRequired": {
+        "billing": [
+          "transport"
+        ],
+        "transport": [
+          "billing"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "billing"
+            ],
+            "properties": {
+              "billing": {
+                "const": "subscription"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "provider": {
+                "const": "claude-cli"
+              },
+              "judge_provider": {
+                "const": "claude-cli"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "repository_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest",
+        "harness",
+        "harness_version",
+        "execution_id",
+        "agent_network"
+      ],
+      "properties": {
+        "manifest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "harness": {
+          "type": "string",
+          "minLength": 1
+        },
+        "harness_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_network": {
+          "const": "bridge"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "plan": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Run plan v1",
+      "description": "What a run is going to measure, declared before any paid call: the subjects and suites it reads, the models, harnesses and grader it uses, the one variable its arms vary, and every cell (arm x model x task x rep) it promises to run. A result.v1 points back at a plan by plan_digest (dokimi.runner.plan.plan_digest); completeness is computed from the plan's cells, never from what happened to finish.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "subjects",
+        "suites",
+        "models",
+        "harnesses",
+        "grader",
+        "varied_variable",
+        "cells",
+        "budget"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "plan.v1"
+        },
+        "generated_at": {
+          "type": "string",
+          "description": "Left out of plan_digest: re-stamping a plan does not change it."
+        },
+        "subjects": {
+          "type": "array",
+          "description": "What is under test: a skill, repository, doc source or profile, pinned by commit and content.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "sha",
+              "fingerprint"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string"
+              },
+              "sha": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "commit the subject was read at; null when it is not in git"
+              },
+              "fingerprint": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "digest of the subject's content as the run sees it"
+              }
+            }
+          }
+        },
+        "suites": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "hash",
+              "reasons"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "hash": {
+                "type": "string",
+                "minLength": 1,
+                "description": "digest of the suite's task/question content"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "why this suite was selected (changed file, label, policy)"
+              }
+            }
+          }
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": "requested model ids; null for a cell that calls no model (an oracle or probe harness)"
+        },
+        "harnesses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "grader": {
+          "type": "object",
+          "required": [
+            "id",
+            "digest"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "digest": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "digest of the verifier or judge prompt the run grades with"
+            }
+          }
+        },
+        "varied_variable": {
+          "description": "The one thing the arms differ in. A list names a factorial design (2x2: code and guidance), not several free variables.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ]
+        },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "cell_id",
+              "arm",
+              "model",
+              "task",
+              "rep"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "cell_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "dokimi.runner.plan.cell_id(arm, model, task, rep): stable across re-plans; completeness refuses an id that does not match the coordinates"
+              },
+              "arm": {
+                "type": "string",
+                "minLength": 1,
+                "description": "the full condition the cell runs under. When a plan crosses several harnesses, the harness is part of the arm (e.g. docker-claude/skill), so cell ids stay distinct; a cell has no separate harness key"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "task": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rep": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "required": [
+            "cells"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cells": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "number of distinct planned cells; completeness refuses a plan where it differs"
+            },
+            "agent_calls": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "cost_usd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "wall_sec": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "result": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Run result v1",
+      "description": "One status per cell of the plan.v1 the run was given (plan_digest). A planned cell absent here is not_run; dokimi.runner.plan.completeness computes planned minus completed and refuses to call a run complete while any planned cell lacks a measured status (pass, fail or inconclusive).",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "plan_digest",
+        "cells"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "result.v1"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "plan_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "execution_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the run's execution id, when the producer has one"
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "cell_id",
+              "status"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "cell_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "inconclusive",
+                  "invalid",
+                  "infra_error",
+                  "not_run"
+                ]
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the model that answered (resolved), which may differ from the planned id"
+              },
+              "detail": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

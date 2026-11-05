@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "https://github.com/intel/dokimi/schemas/ci_policy.v1.json",
+  "title": "CI policy v1",
+  "required": [
+    "schema_version",
+    "min_tasks",
+    "max_regression",
+    "min_lift",
+    "require_lift",
+    "require_discovery"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ci_policy.v1"
+    },
+    "min_tasks": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "max_regression": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "min_lift": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "require_lift": {
+      "type": "boolean"
+    },
+    "require_discovery": {
+      "type": "boolean"
+    }
+  }
+}

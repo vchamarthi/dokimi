@@ -242,3 +242,13 @@
 --min-reps  # eval headroom (#279) adds it: no registry concept yet; a F1b migration names it
 --graph  # eval coverage: the frozen need graph input, a file no registry concept names yet (#331)
 --min  # eval coverage gate floor, [METRIC=]X like --timeout [PHASE=]SEC (#331)
+--base-root  # CI trusted checkout of the pinned comparison base
+--subject-kind  # CI adapter selection: catalog or repository
+--config  # repository CI config artifact path
+--expected-head  # CI source API verified candidate commit
+--expected-base  # CI source API verified comparison commit
+--source-repository  # CI source repository identity
+--store  # CI behavioral baseline storage directory
+--expect-previous  # CI baseline compare-and-swap token
+--revalidated  # explicit fresh evidence accepts baseline identity refresh
+--max-calls  # subscription CI request-count budget; no monetary billing implied

@@ -18,6 +18,7 @@ from dokimi.commands import (
     baseline,
     benchmark,
     catalog,
+    ci,
     context,
     dashboard,
     data,
@@ -125,6 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
     orchestrate.register(sub, positive_int)     # evaluate (one-command pipeline)
     run.register_compare(sub, positive_int)     # compare
     baseline.register(sub, positive_int)        # baseline
+    ci.register(sub, positive_int)
     report.register(sub, positive_int)          # report
     answers.register(sub, positive_int)         # answers
     eval_sub = evaluate.register(sub, positive_int)  # eval: the groups below join it (#94 M1)

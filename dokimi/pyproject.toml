@@ -274,7 +274,16 @@ filterwarnings = [
   # litellm's __init__ ignores this pydantic notice with a process-wide filter,
   # which pytest resets per test; a litellm response model first built in a later
   # test then warns, once per model (ReadOnly TypedDict items are not enforced).
-  "ignore:Item 'summary' on TypedDict class 'ChatCompletionReasoningItem' is using the `ReadOnly` qualifier:UserWarning:pydantic._internal._generate_schema",
+  "ignore:Item 'summary' on TypedDict class 'ChatCompletionReasoningItem' is using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Items? '(device_code|user_code|verification_uri)'(, '(device_code|user_code|verification_uri)')* on TypedDict class '_DeviceCode' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Item 'index' on TypedDict class 'ChatCompletionThinkingBlock' is using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Items? '(access_token|error)'(, '(access_token|error)')* on TypedDict class '_AccessTokenPoll' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Item 'index' on TypedDict class 'ChatCompletionRedactedThinkingBlock' is using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Items? '(token|expires_at|endpoints)'(, '(token|expires_at|endpoints)')* on TypedDict class '_CopilotTokenPayload' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Items? '(device_code|user_code|verification_uri|expires_in|interval)'(, '(device_code|user_code|verification_uri|expires_in|interval)')* on TypedDict class '_DeviceCodePayload' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Items? '(access_token|error|error_description|interval)'(, '(access_token|error|error_description|interval)')* on TypedDict class '_AccessTokenPollPayload' (is|are) using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Item 'api' on TypedDict class '_CopilotEndpointsPayload' is using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
+  "ignore:Item 'login' on TypedDict class '_GithubUserPayload' is using the `ReadOnly` qualifier:UserWarning:^pydantic[.]_internal[.]_generate_schema$",
 ]
 # Test order is shuffled and `random` reseeded per test (pytest-randomly), so a
 # test that leans on another's leftovers fails. The header prints the seed;

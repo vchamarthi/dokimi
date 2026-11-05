@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Copyright (C) 2026 Intel Corporation; SPDX-License-Identifier: Apache-2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "https://github.com/intel/dokimi/schemas/ci_gate.v1.json",
+  "title": "CI gate verdict v1",
+  "required": [
+    "schema_version",
+    "status",
+    "exit_code",
+    "scope",
+    "reason",
+    "reasons",
+    "promotion_eligible",
+    "task_effects",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ci_gate.v1"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail",
+        "inconclusive",
+        "invalid",
+        "infra_error",
+        "not_run"
+      ]
+    },
+    "exit_code": {
+      "enum": [
+        0,
+        1,
+        3,
+        4,
+        5
+      ]
+    },
+    "scope": {
+      "enum": [
+        "static",
+        "behavioral"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "promotion_eligible": {
+      "type": "boolean"
+    },
+    "task_effects": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "summary": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pass"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "fail"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "inconclusive"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 3
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "invalid"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 4
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "infra_error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 5
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "not_run"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 3
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pass"
+          },
+          "scope": {
+            "const": "behavioral"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "promotion_eligible": {
+            "const": true
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "promotion_eligible": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}

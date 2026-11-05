@@ -15,6 +15,10 @@ catalog root, and `runs show` counts skill rows and findings. Point `DOKIMI_RUNS
 at the dedicated `catalog eval` output directory to inspect those receipts. Their
 static pass does not establish a skill's runtime outcome.
 
+CI bundles and approved baseline receipts also list their recorded subject and
+model. The CI bundle counts observations; its gate receipt counts reasons and
+per-task effects. A policy receipt has no subject or model.
+
 Most commands that run an evaluation write their artifacts under `results/` by
 default (a few write elsewhere, listed below). `runs list` shows what is there
 and `runs show` opens one artifact. Both only read files: no model call, no

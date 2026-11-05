@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 .hypothesis/
 .coverage
+.coverage.*
 coverage.xml
 coverage.json
 # Written by the CI steps (and `make ci-local`)
