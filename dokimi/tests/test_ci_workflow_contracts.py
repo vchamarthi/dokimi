@@ -30,7 +30,7 @@ def test_free_and_paid_jobs_have_separate_credentials_and_approval() -> None:
 def test_publisher_has_no_code_checkout_or_package_install() -> None:
     wf = _wf("publish")
     assert wf["permissions"] == {}
-    assert wf["jobs"]["publish"]["permissions"] == {"actions": "read", "pull-requests": "read", "issues": "write"}
+    assert wf["jobs"]["publish"]["permissions"] == {"actions": "read", "pull-requests": "write"}
     assert all("run" not in step for step in wf["jobs"]["publish"]["steps"])
     assert "actions/checkout" not in str(wf)
 

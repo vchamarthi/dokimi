@@ -35,8 +35,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: read
-      pull-requests: read
-      issues: write
+      pull-requests: write
     steps:
     - name: Verify source run and publish informational receipt
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3

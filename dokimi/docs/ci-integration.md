@@ -192,7 +192,9 @@ run-name: 'dokimi:model pr=${{ inputs.pr }} head=${{ inputs.head }} base=${{ inp
 The publisher authenticates the workflow run through GitHub's API, checks its
 repository, workflow path, controller revision, attempt, PR and current source
 revisions, and validates the bounded JSON artifact. It neither checks out nor
-executes artifact content. A stale head or base requires a new measurement.
+executes artifact content. Grant the caller `actions: read` and
+`pull-requests: write`: GitHub requires the latter to comment on a pull request.
+A stale head or base requires a new measurement.
 
 A manually dispatched model job is informational. GitHub does not attach that
 job as a required check on the measured PR head. Configure a separate GitHub App
