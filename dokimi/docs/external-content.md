@@ -331,8 +331,9 @@ a spec error other than an over-long description, or an identical copy of anothe
 is left out, and two skills with the same directory name are shown by their path. It is
 free, runs no model, and is hints only: it never changes the exit code, and the JSON
 carries it under `granularity` with `hints_only: true` and no verdict. Its `next:` line
-names a planned, paid follow-up command (a model run over the candidates), which is not
-yet available; its flags may change before it lands. The thresholds are conservative and
+names the paid follow-up, `catalog routing --model` over the catalog, which asks a model
+to pick a skill for each request in a `QUERIES.json` you write (skill name to the requests
+that should select it). Run it with `--estimate-only` first. The thresholds are conservative and
 the section is a shortlist, not a judgement.
 
 ### Network checks (`--online`, opt in)
