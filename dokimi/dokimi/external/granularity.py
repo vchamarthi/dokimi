@@ -4,7 +4,7 @@
 """Granularity hints for a skill catalog: which skills may overlap, and which may be split.
 
 Tier 1 of intel/dokimi#424, printed by ``catalog check``. Free and static: no model call, no
-embeddings, no verdict. Each hint is a shortlist entry for the paid ``catalog granularity``
+embeddings, no verdict. Each hint is a shortlist entry for the paid ``catalog routing --model``
 run, which measures routing; the static signals do not decide anything.
 """
 
@@ -41,6 +41,7 @@ DISJOINT_WHEN_MIN = 3  # "when" clauses with no word in common, counted greedily
 SPLIT_MIN_SIGNALS = 2  # split signals one skill needs before it is a split candidate
 MERGE_MIN_SIGNALS = 1  # overlap signals one pair needs before it is a merge candidate
 DISPLAY_LIMIT = 20  # rows printed in text mode; JSON keeps every candidate
+QUERIES_PLACEHOLDER = "QUERIES.json"
 PAID_USD_PER_SKILL = 1.75  # #424 PR family: about $7 for 4 skills on haiku with 3 reps
 
 _WORD_RE = re.compile(r"\w+")
@@ -83,7 +84,8 @@ class SplitHint:
 
 @dataclass(frozen=True)
 class PaidHint:
-    """The paid command to run next. It does not exist yet; ``catalog check`` only names it."""
+    """The paid command to run next: ``catalog routing`` with a model. ``catalog check`` only names it; the
+    person writes the requests file it needs (skill name to the requests that should select that skill)."""
 
     argv: tuple[str, ...]
     est_usd: float
@@ -105,7 +107,7 @@ class GranularityHints:
         paid = None
         if self.paid is not None:
             paid = {
-                "status": "planned", "paid": True, "argv": list(self.paid.argv),
+                "status": "available", "paid": True, "needs": QUERIES_PLACEHOLDER, "argv": list(self.paid.argv),
                 "command": self.paid.command, "est_usd": self.paid.est_usd,
                 "estimate": "rough: scaled from the #424 PR family (4 skills, about $7)",
             }
@@ -187,7 +189,8 @@ def format_text(result: GranularityHints) -> list[str]:
     if hidden > 0:
         lines.append(f"  ... {hidden} more candidate row(s) (--format json lists all)")
     if result.paid is not None:
-        lines.append(f"  next (planned, [paid]): {result.paid.command}")
+        lines.append(f"  next ([paid]): {result.paid.command}")
+        lines.append(f"  write {QUERIES_PLACEHOLDER} first: a JSON object of skill name to the requests that should select it")
         lines.append(f"  estimated ${result.paid.est_usd:.2f}, rough (see the #424 PR-family run)")
     return lines
 
@@ -584,6 +587,6 @@ def _paid_hint(root: str, units: list[str]) -> PaidHint | None:
         return None
     est = round(PAID_USD_PER_SKILL * len(units), 2)
     budget = max(1, math.ceil(2 * est))
-    argv = ("dokimi", "catalog", "granularity", "--root", root, "--from-check",
-            "--model", "haiku", "--reps", "3", "--budget", str(budget))
+    argv = ("dokimi", "catalog", "routing", root, "--queries-by-skill", QUERIES_PLACEHOLDER,
+            "--model", "haiku", "--reps", "3", "--max-usd", str(budget))
     return PaidHint(argv=argv, est_usd=est)

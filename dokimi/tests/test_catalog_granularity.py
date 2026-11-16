@@ -136,7 +136,7 @@ def test_a_long_single_topic_skill_is_not_a_split_candidate():
     assert result.split == ()
 
 
-def test_the_json_carries_hints_and_no_verdict_and_names_the_planned_paid_command():
+def test_the_json_carries_hints_and_no_verdict_and_names_the_paid_command():
     result = g.hints(_overlapping_pair(), root="/data/catalog")
     doc = result.to_dict()
 
@@ -144,9 +144,9 @@ def test_the_json_carries_hints_and_no_verdict_and_names_the_planned_paid_comman
     assert "verdict" not in doc
     assert doc["thresholds"]["description_cosine_strong"] == g.DESCRIPTION_COSINE_STRONG
     nxt = doc["next"]
-    assert nxt["status"] == "planned" and nxt["paid"] is True
-    assert nxt["argv"][:4] == ["dokimi", "catalog", "granularity", "--root"]
-    assert nxt["argv"][4] == "/data/catalog"
+    assert nxt["status"] == "available" and nxt["paid"] is True and nxt["needs"] == g.QUERIES_PLACEHOLDER
+    assert nxt["argv"][:4] == ["dokimi", "catalog", "routing", "/data/catalog"]
+    assert nxt["argv"][4:6] == ["--queries-by-skill", g.QUERIES_PLACEHOLDER]
     assert nxt["est_usd"] > 0
 
 
@@ -195,7 +195,7 @@ def test_catalog_check_prints_the_granularity_hints_and_keeps_exit_zero(overlapp
     out = capsys.readouterr().out
     assert "# granularity:" in out
     assert "merge\talpha-port + beta-port" in out
-    assert "next (planned, [paid]): dokimi catalog granularity" in out
+    assert "next ([paid]): dokimi catalog routing" in out
 
 
 def test_catalog_check_json_has_the_granularity_block_and_no_verdict(overlapping_catalog, capsys):
@@ -208,7 +208,7 @@ def test_catalog_check_json_has_the_granularity_block_and_no_verdict(overlapping
     block = report["granularity"]
     assert block["hints_only"] is True and "verdict" not in block
     assert [(p["a"], p["b"]) for p in block["merge"]] == [("alpha-port", "beta-port")]
-    assert block["next"]["status"] == "planned"
+    assert block["next"]["status"] == "available"
 
 
 def test_catalog_check_exits_1_on_a_load_error_regardless_of_the_hints(overlapping_catalog, capsys):
@@ -387,7 +387,7 @@ def test_a_split_only_catalog_prices_the_paid_command_from_its_split_skills():
 
     assert result.merge == () and len(result.split) == 1
     assert result.paid is not None and result.paid.est_usd == 1.75
-    assert result.paid.argv[5:] == ("--from-check", "--model", "haiku", "--reps", "3", "--budget", "4")
+    assert result.paid.argv[6:] == ("--model", "haiku", "--reps", "3", "--max-usd", "4")
 
 
 def test_a_valid_copy_is_offered_when_the_shallower_original_is_ineligible(tmp_path, capsys):
@@ -433,3 +433,10 @@ def test_catalog_check_per_skill_says_the_granularity_hints_were_not_run(overlap
     args.func(args)
 
     assert "# granularity: not run with --per-skill" in capsys.readouterr().out
+
+
+def test_the_paid_command_it_names_parses_as_a_real_command():
+    """The hint once named `catalog granularity`, a command that did not exist: it must parse as written."""
+    argv = g.hints(_overlapping_pair(), root="/data/catalog").paid.argv
+    args = build_parser().parse_args(list(argv[1:]))
+    assert args.catalog_cmd == "routing" and args.queries_by_skill == g.QUERIES_PLACEHOLDER
