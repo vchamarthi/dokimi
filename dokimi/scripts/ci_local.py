@@ -24,6 +24,7 @@ Differences from CI, all printed as notices:
   the next (CI stops a job's checks at its first failing step, except for
   steps under `if: ${{ !cancelled() }}`: every step of `static` after the
   install, and the deptry step of `typecheck`).
+- The PR carries no labels, so a job gated on one (platforms.yml) is skipped.
 - A matrix runs one leg: the dev venv's Python, standing in for the coverage
   leg too (`matrix.coverage` is true), so the changed-lines gate runs here. A
   notice says so when that is not the Python CI's single-version jobs use.
@@ -94,6 +95,7 @@ PAIRED = {"-r": "-r", "--requirement": "-r", "-c": "-c", "--constraint": "-c",
           "-e": "-e", "--editable": "-e"}
 URL = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")  # `-e git+https://...` is not a path
 UPSTREAM_URL = re.compile(r"(^|[/@])github\.com[:/]intel/dokimi(\.git)?/?$", re.IGNORECASE)
+PR_LABEL_TEST = re.compile(r"contains\(github\.event\.pull_request\.labels\.\*\.name, '[^']*'\)")
 ORIGIN_BASE = re.compile(r"\borigin/(?=\$\{?BASE_REF\b)")  # `origin/$BASE_REF` in a step
 
 
@@ -229,6 +231,8 @@ class Context:
             expr = expr.replace(fn, "True")
         # A local run has no failed job to report (pip-audit.yml's `report` job).
         expr = expr.replace("failure()", "False")
+        # A local run is a PR with no labels: a job gated on one (platforms.yml's needs-windows) is skipped.
+        expr = PR_LABEL_TEST.sub("False", expr)
         for key, val in sorted(self.values.items(), key=lambda kv: -len(kv[0])):
             expr = expr.replace(key, repr(val))
         expr = expr.replace("&&", " and ").replace("||", " or ")

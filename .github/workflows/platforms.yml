@@ -1,0 +1,118 @@
+# Copyright (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+name: platforms
+
+# The whole suite on Windows and macOS: nightly, by hand, and on a PR labeled `needs-windows`.
+# Not a required check; a scheduled run opens, updates or closes one issue per platform.
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+  schedule:
+    - cron: '7 3 * * *'
+
+permissions:
+  contents: read
+
+# A label other than needs-windows gets a group of its own, so it cancels no run in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'needs-windows' && github.run_id) || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, py3.13)
+    if: ${{ github.event_name != 'pull_request' || (github.event.action == 'labeled' && github.event.label.name == 'needs-windows') || (github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'needs-windows')) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+        working-directory: dokimi
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # 3.13, as windows-smoke and ci.yml's other single-version jobs.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: dokimi/requirements.lock.txt
+      - name: Install deps
+        run: pip install --no-deps --require-hashes -r requirements.lock.txt
+      # -rfEs prints each failure, error and skip reason. Windows has no SIGALRM, so a hung test ends the run.
+      - name: Run tests
+        id: suite
+        run: pytest -n auto -q -rfEs 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+      # The report job reads the outcome and the failing ids from here; it runs after a failed install too.
+      - name: Record the result
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOME: ${{ steps.suite.outcome }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/result"
+          echo "$OUTCOME" > "$RUNNER_TEMP/result/outcome"
+          { grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/pytest.log" || true; } | cut -d' ' -f2 | sort -u > "$RUNNER_TEMP/result/failed"
+          { echo "Outcome: $OUTCOME"; sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/result/failed"; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: result-${{ runner.os }}
+          path: ${{ runner.temp }}/result
+          retention-days: 7
+
+  # One issue per platform, the same title each night, as pip-audit.yml's report does;
+  # closed with a comment once that platform's scheduled run is green again.
+  report:
+    name: Report the scheduled result
+    needs: tests
+    if: ${{ !cancelled() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: result-*
+          path: ${{ runner.temp }}/results
+      # A leg with no uploaded result (runner lost) counts as failed.
+      - name: Open, update or close each platform's issue
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTS: ${{ runner.temp }}/results
+        run: |
+          for os in Windows macOS; do
+            title="Nightly full suite fails on $os"
+            dir="$RESULTS/result-$os"
+            num=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+            if [ "$(cat "$dir/outcome" 2>/dev/null)" = success ]; then
+              if [ -n "$num" ]; then
+                gh issue close "$num" --comment "Green again: $RUN_URL"
+              fi
+              continue
+            fi
+            count=$(grep -c . "$dir/failed" 2>/dev/null || true)
+            count=${count:-0}
+            if [ "$count" -gt 0 ]; then
+              ids=$(head -n 100 "$dir/failed" | sed 's/^/- `/; s/$/`/')
+              [ "$count" -le 100 ] || ids="$ids"$'\n'"- and $((count - 100)) more, in the run log"
+            else
+              ids="No failing test id in the log: the install failed, the run ended before pytest's summary (a hang on Windows ends it), or no result was uploaded."
+            fi
+            body="The scheduled $os run of the whole suite (platforms.yml, Python 3.13) failed: $RUN_URL"$'\n\n'"Failing tests ($count):"$'\n'"$ids"
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --body "Still failing. $body"
+            else
+              gh issue create --title "$title" --body "$body"
+            fi
+          done

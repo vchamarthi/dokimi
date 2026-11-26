@@ -547,7 +547,10 @@ runs `pip check` and the installed-package smoke test,
    module entry points.
 
    **windows-smoke** (a PR check on `windows-latest`) builds the wheel, installs
-   it, runs the installed-package smoke test and a few fast tests.
+   it, runs the installed-package smoke test and a few fast tests. The whole
+   suite runs on `windows-latest` and `macos-latest` in `platforms.yml`: nightly,
+   by hand, and on a PR that carries the `needs-windows` label. It is not a
+   required check; a failed nightly run opens or updates one issue per platform.
 
 **`agent-quality.yml`** — task and benchmark checks:
 

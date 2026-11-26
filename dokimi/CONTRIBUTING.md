@@ -110,6 +110,13 @@ CI additionally holds a PR to:
   job: the whole suite on `main` (a manual run too, whichever branch it is started on) under `-n auto` in four legs, each with its own
   `--randomly-seed` (`GITHUB_RUN_NUMBER * 10 + leg`). The `Pick the seed` step prints the seed
   and the job summary shows it; replay a failing leg with `pytest -n auto --randomly-seed=<seed>`.
+- **Not a PR check. Windows and macOS run nightly.** `.github/workflows/platforms.yml` runs the
+  whole suite on `windows-latest` and `macos-latest` (Python 3.13, `-rfEs`, so skip reasons are
+  printed) every night and by hand. A PR runs it only while it carries the `needs-windows` label:
+  when the label is added and on each push after that. It never blocks a merge. A failed
+  nightly leg opens one issue per platform, `Nightly full suite fails on Windows` (or `macOS`),
+  with the run link and the failing test ids, and comments on it while it stays red; the next
+  green nightly run closes it.
 - **User outcomes hold.** `pytest --outcomes` checks each promise in
   `tests/outcomes/*.json` (what a doc tells the user, the code that keeps it,
   and evidence ids) against the tests that ran. A test claims an id with

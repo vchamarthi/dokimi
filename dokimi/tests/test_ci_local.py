@@ -123,6 +123,15 @@ def test_ci_yml_label_guards_evaluate_as_a_push_to_the_pr(capsys: Any) -> None:
     assert "NOTICE" not in capsys.readouterr().out
 
 
+def test_a_job_gated_on_a_pr_label_is_skipped_locally(capsys: Any) -> None:
+    """A local run is a PR with no labels, so platforms.yml's Windows and macOS suite does not run here."""
+    ctx = cl.Context("main", PYV, Path("."))
+    jobs = dict(cl.load_workflows())["platforms.yml"]["jobs"]
+    assert ctx.condition(str(jobs["tests"]["if"])) is False
+    assert ctx.condition("contains(github.event.pull_request.labels.*.name, 'x') || github.event_name == 'pull_request'") is True
+    assert "NOTICE" not in capsys.readouterr().out
+
+
 def test_failure_condition_is_false_locally() -> None:
     """A local run has no failed job: pip-audit.yml's `report` job (which opens an issue) is skipped."""
     ctx = cl.Context("main", PYV, Path("."))
